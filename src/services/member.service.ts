@@ -1,0 +1,341 @@
+import mongoose from 'mongoose';
+import { Member, IMemberDocument } from '../models/member.model';
+import { ApiError } from '../utils/ApiError';
+import { MESSAGES } from '../constants/messages';
+import {
+  MemberType,
+  MemberStatus,
+  PaymentStatus,
+  MembershipPlan,
+  ShiftType,
+} from '../constants/enums';
+import { seatService } from './seat.service';
+
+const PLAN_MULTIPLIER: Record<MembershipPlan, number> = {
+  [MembershipPlan.MONTHLY]: 1,
+  [MembershipPlan.QUARTERLY]: 3,
+  [MembershipPlan.HALF_YEARLY]: 6,
+  [MembershipPlan.YEARLY]: 12,
+};
+
+export interface MemberFilters {
+  status?: MemberStatus;
+  memberType?: MemberType;
+  paymentStatus?: PaymentStatus;
+  hasSeat?: boolean;
+  search?: string;
+}
+
+export interface PaginationOptions {
+  page?: number;
+  limit?: number;
+}
+
+export type MemberSortOption = 'name_asc' | 'name_desc' | 'newest' | 'expiry_asc';
+
+export interface CreatePermanentMemberData {
+  fullName: string;
+  mobileNumber: string;
+  email?: string;
+  courseName?: string;
+  memberType: MemberType;
+  membershipPlan: MembershipPlan;
+  shiftType: ShiftType;
+  startDate: Date;
+  endDate: Date;
+  feePerMonth: number;
+  discount?: number;
+  paymentStatus: PaymentStatus;
+  paymentMode: string;
+  amountPaid: number;
+  seatId?: string;
+  remarks?: string;
+}
+
+export interface CreateDemoMemberData {
+  fullName: string;
+  mobileNumber: string;
+  email?: string;
+  courseName?: string;
+  memberType: MemberType;
+  shiftType: ShiftType;
+  startDate: Date;
+  endDate: Date;
+  remarks?: string;
+}
+
+const calculateFees = (data: {
+  feePerMonth: number;
+  discount?: number;
+  membershipPlan: MembershipPlan;
+  amountPaid: number;
+}) => {
+  const discount = data.discount ?? 0;
+  const feesAfterDiscount = data.feePerMonth - (data.feePerMonth * discount) / 100;
+  const multiplier = PLAN_MULTIPLIER[data.membershipPlan];
+  const totalFee = feesAfterDiscount * multiplier;
+  const dueAmount = Math.max(0, totalFee - data.amountPaid);
+
+  let paymentStatus: PaymentStatus;
+  if (data.amountPaid === 0) {
+    paymentStatus = PaymentStatus.UNPAID;
+  } else if (dueAmount === 0) {
+    paymentStatus = PaymentStatus.PAID;
+  } else {
+    paymentStatus = PaymentStatus.PARTIAL;
+  }
+
+  return { feesAfterDiscount, totalFee, dueAmount, paymentStatus };
+};
+
+const buildSortQuery = (sort?: MemberSortOption): Record<string, 1 | -1> => {
+  switch (sort) {
+    case 'name_asc':
+      return { fullName: 1 };
+    case 'name_desc':
+      return { fullName: -1 };
+    case 'expiry_asc':
+      return { endDate: 1 };
+    case 'newest':
+    default:
+      return { createdAt: -1 };
+  }
+};
+
+export const memberService = {
+  async generateMemberId(libraryId: string): Promise<string> {
+    const count = await Member.countDocuments({ library: libraryId });
+    const paddedNumber = String(count + 1).padStart(4, '0');
+    return `LIB-${paddedNumber}`;
+  },
+
+  async createPermanentMember(
+    data: CreatePermanentMemberData,
+    libraryId: string
+  ): Promise<IMemberDocument> {
+    const memberId = await this.generateMemberId(libraryId);
+    const { feesAfterDiscount, totalFee, dueAmount, paymentStatus } = calculateFees({
+      feePerMonth: data.feePerMonth,
+      discount: data.discount,
+      membershipPlan: data.membershipPlan,
+      amountPaid: data.amountPaid,
+    });
+
+    const member = await Member.create({
+      library: libraryId,
+      memberId,
+      fullName: data.fullName,
+      email: data.email,
+      mobileNumber: data.mobileNumber,
+      courseName: data.courseName,
+      memberType: MemberType.PERMANENT,
+      membershipPlan: data.membershipPlan,
+      shiftType: data.shiftType,
+      startDate: data.startDate,
+      endDate: data.endDate,
+      feePerMonth: data.feePerMonth,
+      discount: data.discount ?? 0,
+      feesAfterDiscount,
+      totalFee,
+      amountPaid: data.amountPaid,
+      dueAmount,
+      paymentStatus,
+      paymentMode: data.paymentMode,
+      remarks: data.remarks,
+    });
+
+    if (data.seatId) {
+      await seatService.assignSeat(data.seatId, member._id.toString(), data.shiftType);
+      member.seat = new mongoose.Types.ObjectId(data.seatId);
+      await member.save();
+    }
+
+    return member.populate('seat');
+  },
+
+  async createDemoMember(data: CreateDemoMemberData, libraryId: string): Promise<IMemberDocument> {
+    const memberId = await this.generateMemberId(libraryId);
+
+    return Member.create({
+      library: libraryId,
+      memberId,
+      fullName: data.fullName,
+      email: data.email,
+      mobileNumber: data.mobileNumber,
+      courseName: data.courseName,
+      memberType: MemberType.DEMO,
+      shiftType: data.shiftType,
+      startDate: data.startDate,
+      endDate: data.endDate,
+      remarks: data.remarks,
+    });
+  },
+
+  async createMemberWithoutSeat(
+    data: CreatePermanentMemberData,
+    libraryId: string
+  ): Promise<IMemberDocument> {
+    const memberId = await this.generateMemberId(libraryId);
+    const { feesAfterDiscount, totalFee, dueAmount, paymentStatus } = calculateFees({
+      feePerMonth: data.feePerMonth,
+      discount: data.discount,
+      membershipPlan: data.membershipPlan,
+      amountPaid: data.amountPaid,
+    });
+
+    return Member.create({
+      library: libraryId,
+      memberId,
+      fullName: data.fullName,
+      email: data.email,
+      mobileNumber: data.mobileNumber,
+      courseName: data.courseName,
+      memberType: MemberType.WITHOUT_SEAT,
+      membershipPlan: data.membershipPlan,
+      shiftType: data.shiftType,
+      startDate: data.startDate,
+      endDate: data.endDate,
+      feePerMonth: data.feePerMonth,
+      discount: data.discount ?? 0,
+      feesAfterDiscount,
+      totalFee,
+      amountPaid: data.amountPaid,
+      dueAmount,
+      paymentStatus,
+      paymentMode: data.paymentMode,
+      remarks: data.remarks,
+    });
+  },
+
+  async getAllMembers(
+    libraryId: string,
+    filters: MemberFilters = {},
+    pagination: PaginationOptions = {},
+    sort?: MemberSortOption
+  ) {
+    const page = pagination.page ?? 1;
+    const limit = pagination.limit ?? 10;
+    const skip = (page - 1) * limit;
+
+    const query: Record<string, unknown> = { library: libraryId };
+
+    if (filters.status) {
+      query.status = filters.status;
+    }
+    if (filters.memberType) {
+      query.memberType = filters.memberType;
+    }
+    if (filters.paymentStatus) {
+      query.paymentStatus = filters.paymentStatus;
+    }
+    if (filters.hasSeat === true) {
+      query.seat = { $exists: true, $ne: null };
+    } else if (filters.hasSeat === false) {
+      query.$or = [{ seat: { $exists: false } }, { seat: null }];
+    }
+    if (filters.search) {
+      query.fullName = { $regex: filters.search, $options: 'i' };
+    }
+
+    const sortQuery = buildSortQuery(sort);
+
+    const [members, totalCount] = await Promise.all([
+      Member.find(query).populate('seat').sort(sortQuery).skip(skip).limit(limit),
+      Member.countDocuments(query),
+    ]);
+
+    const totalPages = Math.ceil(totalCount / limit);
+
+    return {
+      members,
+      totalCount,
+      totalPages,
+      currentPage: page,
+    };
+  },
+
+  async getMemberById(memberId: string): Promise<IMemberDocument> {
+    if (!mongoose.Types.ObjectId.isValid(memberId)) {
+      throw new ApiError(400, MESSAGES.VALIDATION_ERROR);
+    }
+
+    const member = await Member.findById(memberId).populate('seat');
+    if (!member) {
+      throw new ApiError(404, MESSAGES.MEMBER_NOT_FOUND);
+    }
+    return member;
+  },
+
+  async updateMember(memberId: string, data: Partial<CreatePermanentMemberData>): Promise<IMemberDocument> {
+    const member = await this.getMemberById(memberId);
+
+    const feeFieldsUpdated =
+      data.feePerMonth !== undefined ||
+      data.discount !== undefined ||
+      data.membershipPlan !== undefined ||
+      data.amountPaid !== undefined;
+
+    if (feeFieldsUpdated && member.feePerMonth && member.membershipPlan) {
+      const { feesAfterDiscount, totalFee, dueAmount, paymentStatus } = calculateFees({
+        feePerMonth: data.feePerMonth ?? member.feePerMonth,
+        discount: data.discount ?? member.discount,
+        membershipPlan: data.membershipPlan ?? member.membershipPlan,
+        amountPaid: data.amountPaid ?? member.amountPaid,
+      });
+
+      member.feesAfterDiscount = feesAfterDiscount;
+      member.totalFee = totalFee;
+      member.dueAmount = dueAmount;
+      member.paymentStatus = paymentStatus;
+    }
+
+    if (data.fullName) member.fullName = data.fullName;
+    if (data.mobileNumber) member.mobileNumber = data.mobileNumber;
+    if (data.email !== undefined) member.email = data.email;
+    if (data.courseName !== undefined) member.courseName = data.courseName;
+    if (data.shiftType) member.shiftType = data.shiftType;
+    if (data.startDate) member.startDate = data.startDate;
+    if (data.endDate) member.endDate = data.endDate;
+    if (data.feePerMonth !== undefined) member.feePerMonth = data.feePerMonth;
+    if (data.discount !== undefined) member.discount = data.discount;
+    if (data.membershipPlan) member.membershipPlan = data.membershipPlan;
+    if (data.amountPaid !== undefined) member.amountPaid = data.amountPaid;
+    if (data.paymentMode) member.paymentMode = data.paymentMode as IMemberDocument['paymentMode'];
+    if (data.remarks !== undefined) member.remarks = data.remarks;
+
+    if (data.seatId && data.shiftType) {
+      await seatService.assignSeat(data.seatId, member._id.toString(), data.shiftType);
+      member.seat = new mongoose.Types.ObjectId(data.seatId);
+    }
+
+    await member.save();
+    return member.populate('seat');
+  },
+
+  async deleteMember(memberId: string): Promise<void> {
+    const member = await this.getMemberById(memberId);
+    const seatId = member.seat?.toString();
+
+    await Member.findByIdAndDelete(memberId);
+
+    if (seatId) {
+      await seatService.releaseSeat(seatId);
+    }
+  },
+
+  async getExpiredMembers(libraryId: string): Promise<number> {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+
+    const result = await Member.updateMany(
+      {
+        library: libraryId,
+        endDate: { $lt: today },
+        status: MemberStatus.ACTIVE,
+      },
+      { status: MemberStatus.EXPIRED }
+    );
+
+    return result.modifiedCount;
+  },
+};

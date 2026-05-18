@@ -1,0 +1,105 @@
+export const MESSAGES = {
+  // General
+  ROUTE_NOT_FOUND: 'Route not found',
+  INTERNAL_SERVER_ERROR: 'Internal server error',
+  VALIDATION_ERROR: 'Validation error',
+  FORBIDDEN: 'Access forbidden',
+
+  // Auth
+  USER_REGISTERED: 'User registered successfully',
+  LOGIN_SUCCESS: 'Login successful',
+  LOGOUT_SUCCESS: 'Logout successful',
+  TOKEN_REFRESHED: 'Access token refreshed successfully',
+  TOKEN_EXPIRED: 'Token has expired',
+  UNAUTHORIZED: 'Unauthorized access',
+  INVALID_CREDENTIALS: 'Invalid email or password',
+  DUPLICATE_EMAIL: 'Email already exists',
+  DUPLICATE_MOBILE: 'Mobile number already exists',
+  INVALID_REFRESH_TOKEN: 'Invalid refresh token',
+  EMAIL_NOT_VERIFIED: 'Please verify your email with OTP before logging in',
+  OTP_SENT: 'OTP sent to your email successfully',
+  OTP_VERIFIED: 'OTP verified successfully',
+  OTP_INVALID: 'Invalid or expired OTP',
+  OTP_RESENT: 'OTP resent successfully',
+  PASSWORD_RESET_SUCCESS: 'Password reset successfully',
+  FORGOT_PASSWORD_OTP_VERIFIED: 'Forgot password OTP verified successfully',
+  INVALID_RESET_TOKEN: 'Invalid or expired password reset token',
+  FORGOT_PASSWORD_OTP_SENT: 'If the email exists, an OTP has been sent',
+  EMAIL_ALREADY_VERIFIED: 'Email is already verified',
+  SMTP_NOT_CONFIGURED: 'Email service is not configured',
+  BREVO_NOT_CONFIGURED: 'Brevo API key is not configured',
+
+  // User
+  USER_NOT_FOUND: 'User not found',
+  USER_INACTIVE: 'User account is inactive',
+
+  // Library
+  LIBRARY_CREATED: 'Library created successfully',
+  LIBRARY_UPDATED: 'Library updated successfully',
+  LIBRARY_NOT_FOUND: 'Library not found',
+  LIBRARY_ALREADY_EXISTS: 'Library already exists for this owner',
+  LIBRARY_FETCHED: 'Library fetched successfully',
+  LIBRARY_STATS_FETCHED: 'Library stats fetched successfully',
+  LIBRARY_QR_FETCHED: 'Library QR code fetched successfully',
+  LIBRARY_QR_GENERATED: 'Library QR code generated successfully',
+  INVALID_QR_CODE: 'Invalid or expired QR code',
+  SCAN_LIBRARY_FETCHED: 'Library details fetched successfully',
+  SCAN_REGISTRATION_SUCCESS: 'Student registered successfully via QR scan',
+
+  // Member
+  MEMBER_CREATED: 'Member created successfully',
+  MEMBER_UPDATED: 'Member updated successfully',
+  MEMBER_DELETED: 'Member deleted successfully',
+  MEMBER_NOT_FOUND: 'Member not found',
+  MEMBER_ID_GENERATED: 'Member ID generated successfully',
+  MEMBERS_FETCHED: 'Members fetched successfully',
+  MEMBER_FETCHED: 'Member fetched successfully',
+  EXPIRED_MEMBERS_UPDATED: 'Expired members updated successfully',
+
+  // Seat
+  SEAT_NOT_AVAILABLE: 'Seat is not available',
+  SEAT_ASSIGNED: 'Seat assigned successfully',
+  SEAT_RELEASED: 'Seat released successfully',
+  SEAT_ALREADY_BOOKED: 'Seat is already booked',
+  SEAT_LOCKED: 'Seat locked successfully',
+  SEATS_FETCHED: 'Seats fetched successfully',
+  SEAT_NOT_FOUND: 'Seat not found',
+
+  // Payment
+  PAYMENT_RECORDED: 'Payment recorded successfully',
+  DUE_CALCULATED: 'Due amount calculated successfully',
+
+  // Dashboard
+  DASHBOARD_STATS_FETCHED: 'Dashboard stats fetched successfully',
+
+  // Revenue
+  REVENUE_FETCHED: 'Revenue data fetched successfully',
+
+  // Expense
+  EXPENSE_CREATED: 'Expense created successfully',
+  EXPENSE_UPDATED: 'Expense updated successfully',
+  EXPENSE_DELETED: 'Expense deleted successfully',
+  EXPENSE_NOT_FOUND: 'Expense not found',
+  EXPENSE_FETCHED: 'Expense fetched successfully',
+  EXPENSES_FETCHED: 'Expenses fetched successfully',
+  EXPENSE_SUMMARY_FETCHED: 'Expense summary fetched successfully',
+
+  // Report
+  REPORT_GENERATED: 'Report generated successfully',
+  REPORT_EXPORTED: 'Report exported successfully',
+
+  // Subscription
+  SUBSCRIPTION_CREATED: 'Subscription created successfully',
+  SUBSCRIPTION_ACTIVATED: 'Subscription activated successfully',
+  SUBSCRIPTION_CANCELLED: 'Subscription cancelled successfully',
+  SUBSCRIPTION_NOT_FOUND: 'Subscription not found',
+  SUBSCRIPTION_ALREADY_ACTIVE: 'User already has an active subscription',
+  SUBSCRIPTION_PAYMENT_FAILED: 'Subscription payment failed',
+  SUBSCRIPTION_WEBHOOK_RECEIVED: 'Webhook received successfully',
+  SUBSCRIPTION_WEBHOOK_VERIFIED: 'Webhook verified successfully',
+  SUBSCRIPTION_INVALID_SIGNATURE: 'Invalid webhook signature',
+  SUBSCRIPTION_PLANS_FETCHED: 'Subscription plans fetched successfully',
+  SUBSCRIPTION_FETCHED: 'Subscription fetched successfully',
+  SUBSCRIPTION_PLAN_NOT_FOUND: 'Subscription plan not found',
+  RAZORPAY_NOT_CONFIGURED: 'Razorpay credentials are not configured',
+};

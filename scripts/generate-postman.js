@@ -1,0 +1,395 @@
+const fs = require('fs');
+
+const loginScript = {
+  listen: 'test',
+  script: {
+    type: 'text/javascript',
+    exec: [
+      'if (pm.response.code === 200) {',
+      '  const res = pm.response.json();',
+      '  if (res.data && res.data.accessToken) {',
+      "    pm.collectionVariables.set('accessToken', res.data.accessToken);",
+      '  }',
+      '}',
+    ],
+  },
+};
+
+const libraryScript = {
+  listen: 'test',
+  script: {
+    type: 'text/javascript',
+    exec: [
+      'if (pm.response.code === 201 || pm.response.code === 200) {',
+      '  const res = pm.response.json();',
+      '  if (res.data && res.data._id) {',
+      "    pm.collectionVariables.set('libraryId', res.data._id);",
+      '  }',
+      '  if (res.data && res.data.qrCodeId) {',
+      "    pm.collectionVariables.set('qrCodeId', res.data.qrCodeId);",
+      '  }',
+      '}',
+    ],
+  },
+};
+
+const memberScript = {
+  listen: 'test',
+  script: {
+    type: 'text/javascript',
+    exec: [
+      'if (pm.response.code === 201) {',
+      '  const res = pm.response.json();',
+      '  if (res.data && res.data._id) {',
+      "    pm.collectionVariables.set('memberId', res.data._id);",
+      '  }',
+      '}',
+    ],
+  },
+};
+
+const resetTokenScript = {
+  listen: 'test',
+  script: {
+    type: 'text/javascript',
+    exec: [
+      'if (pm.response.code === 200) {',
+      '  const res = pm.response.json();',
+      '  if (res.data && res.data.resetToken) {',
+      "    pm.collectionVariables.set('resetToken', res.data.resetToken);",
+      '  }',
+      '}',
+    ],
+  },
+};
+
+const seatScript = {
+  listen: 'test',
+  script: {
+    type: 'text/javascript',
+    exec: [
+      'if (pm.response.code === 200) {',
+      '  const res = pm.response.json();',
+      '  if (Array.isArray(res.data) && res.data[0] && res.data[0]._id) {',
+      "    pm.collectionVariables.set('seatId', res.data[0]._id);",
+      '  }',
+      '}',
+    ],
+  },
+};
+
+const expenseScript = {
+  listen: 'test',
+  script: {
+    type: 'text/javascript',
+    exec: [
+      'if (pm.response.code === 201) {',
+      '  const res = pm.response.json();',
+      '  if (res.data && res.data._id) {',
+      "    pm.collectionVariables.set('expenseId', res.data._id);",
+      '  }',
+      '}',
+    ],
+  },
+};
+
+const req = (name, method, url, opts = {}) => {
+  const item = {
+    name,
+    request: {
+      method,
+      header: opts.headers || [],
+      url,
+      description: opts.desc || '',
+    },
+  };
+
+  if (opts.body) {
+    item.request.header.push({ key: 'Content-Type', value: 'application/json' });
+    item.request.body = { mode: 'raw', raw: JSON.stringify(opts.body, null, 2) };
+  }
+
+  if (opts.auth === false) {
+    item.request.auth = { type: 'noauth' };
+  }
+
+  if (opts.event) {
+    item.event = opts.event;
+  }
+
+  return item;
+};
+
+const b = '{{baseUrl}}';
+const api = `${b}/api/v1`;
+
+const collection = {
+  info: {
+    _postman_id: 'lms-api-v2-full',
+    name: 'Library Management System API v2',
+    description:
+      'Complete LMS API collection.\n\nSetup:\n1. Import environment\n2. Run Auth > Login (saves accessToken)\n3. Run Library > Create Library (saves libraryId, qrCodeId)\n4. Use other endpoints',
+    schema: 'https://schema.getpostman.com/json/collection/v2.1.0/collection.json',
+  },
+  auth: {
+    type: 'bearer',
+    bearer: [{ key: 'token', value: '{{accessToken}}', type: 'string' }],
+  },
+  variable: [
+    { key: 'baseUrl', value: 'http://localhost:5000' },
+    { key: 'accessToken', value: '' },
+    { key: 'libraryId', value: '' },
+    { key: 'qrCodeId', value: '' },
+    { key: 'memberId', value: '' },
+    { key: 'seatId', value: '' },
+    { key: 'expenseId', value: '' },
+    { key: 'planId', value: '' },
+    { key: 'resetToken', value: '' },
+  ],
+  item: [
+    {
+      name: '00 - Public (QR Scan)',
+      item: [
+        req('Open Scan Page', 'GET', `${b}/scan?libraryId={{libraryId}}&qrCodeId={{qrCodeId}}`, {
+          auth: false,
+          desc: 'Open in browser for student registration form',
+        }),
+        req('Get Library Info', 'GET', `${api}/public/scan/library?libraryId={{libraryId}}&qrCodeId={{qrCodeId}}`, {
+          auth: false,
+        }),
+        req('Register Demo Student (QR)', 'POST', `${api}/public/scan/register`, {
+          auth: false,
+          body: {
+            libraryId: '{{libraryId}}',
+            qrCodeId: '{{qrCodeId}}',
+            fullName: 'QR Student',
+            mobileNumber: '9876543210',
+            shiftType: 'morning',
+            startDate: '2025-05-01T00:00:00.000Z',
+            endDate: '2025-05-08T00:00:00.000Z',
+            courseName: 'UPSC',
+            email: 'student@example.com',
+          },
+          event: [memberScript],
+        }),
+      ],
+    },
+    {
+      name: '01 - Auth',
+      item: [
+        req('Register', 'POST', `${api}/auth/register`, {
+          auth: false,
+          body: {
+            fullName: 'John Owner',
+            email: 'owner@library.com',
+            mobileNumber: '9876543210',
+            password: 'password123',
+            confirmPassword: 'password123',
+          },
+        }),
+        req('Verify Email OTP', 'POST', `${api}/auth/verify-email`, {
+          auth: false,
+          body: { email: 'owner@library.com', otp: '123456' },
+        }),
+        req('Resend OTP', 'POST', `${api}/auth/resend-otp`, {
+          auth: false,
+          body: { email: 'owner@library.com' },
+        }),
+        req('Login', 'POST', `${api}/auth/login`, {
+          auth: false,
+          body: { email: 'owner@library.com', password: 'password123' },
+          event: [loginScript],
+        }),
+        req('Refresh Token', 'POST', `${api}/auth/refresh`, { auth: false, body: {} }),
+        req('Forgot Password', 'POST', `${api}/auth/forgot-password`, {
+          auth: false,
+          body: { email: 'owner@library.com' },
+        }),
+        req('Verify Forgot Password OTP', 'POST', `${api}/auth/verify-forgot-password-otp`, {
+          auth: false,
+          body: { email: 'owner@library.com', otp: '123456' },
+          event: [resetTokenScript],
+        }),
+        req('Reset Password', 'POST', `${api}/auth/reset-password`, {
+          auth: false,
+          body: {
+            resetToken: '{{resetToken}}',
+            password: 'newpass123',
+            confirmPassword: 'newpass123',
+          },
+        }),
+        req('Logout', 'POST', `${api}/auth/logout`, {}),
+      ],
+    },
+    {
+      name: '02 - Library',
+      item: [
+        req('Create Library', 'POST', `${api}/library`, {
+          body: {
+            libraryName: 'Central Study Library',
+            address: '123 Main St, Ahmedabad',
+            totalSeats: 50,
+          },
+          event: [libraryScript],
+        }),
+        req('Get My Library', 'GET', `${api}/library`, { event: [libraryScript] }),
+        req('Update Library', 'PUT', `${api}/library`, {
+          body: { libraryName: 'Central Study Library Updated' },
+        }),
+        req('Get Library Stats', 'GET', `${api}/library/stats`, {}),
+        req('Get Library QR', 'GET', `${api}/library/qr`, { event: [libraryScript] }),
+      ],
+    },
+    {
+      name: '03 - Seats',
+      item: [
+        req('Get All Seats', 'GET', `${api}/seats/{{libraryId}}/all`, { event: [seatScript] }),
+        req('Get Available Seats', 'GET', `${api}/seats/{{libraryId}}/available?shift=morning`, {}),
+        req('Get Seats By Shift', 'GET', `${api}/seats/{{libraryId}}/by-shift`, {}),
+        req('Lock Seat', 'POST', `${api}/seats/lock/{{seatId}}`, {
+          body: { memberId: '{{memberId}}' },
+        }),
+        req('Release Seat', 'POST', `${api}/seats/release/{{seatId}}`, {}),
+      ],
+    },
+    {
+      name: '04 - Members',
+      item: [
+        req('Create Permanent Member', 'POST', `${api}/members/permanent`, {
+          body: {
+            fullName: 'Rahul Sharma',
+            mobileNumber: '9123456789',
+            memberType: 'permanent',
+            membershipPlan: 'monthly',
+            shiftType: 'morning',
+            startDate: '2025-05-01T00:00:00.000Z',
+            endDate: '2025-06-01T00:00:00.000Z',
+            feePerMonth: 2000,
+            discount: 10,
+            paymentStatus: 'partial',
+            paymentMode: 'upi',
+            amountPaid: 1500,
+            seatId: '{{seatId}}',
+          },
+          event: [memberScript],
+        }),
+        req('Create Demo Member', 'POST', `${api}/members/demo`, {
+          body: {
+            fullName: 'Demo Student',
+            mobileNumber: '9988776655',
+            memberType: 'demo',
+            shiftType: 'evening',
+            startDate: '2025-05-01T00:00:00.000Z',
+            endDate: '2025-05-07T00:00:00.000Z',
+          },
+          event: [memberScript],
+        }),
+        req('Create Member Without Seat', 'POST', `${api}/members/without-seat`, {
+          body: {
+            fullName: 'Priya Patel',
+            mobileNumber: '9111222333',
+            memberType: 'without_seat',
+            membershipPlan: 'quarterly',
+            shiftType: 'full_day',
+            startDate: '2025-05-01T00:00:00.000Z',
+            endDate: '2025-08-01T00:00:00.000Z',
+            feePerMonth: 1500,
+            paymentStatus: 'paid',
+            paymentMode: 'cash',
+            amountPaid: 4500,
+          },
+        }),
+        req('Get All Members', 'GET', `${api}/members?page=1&limit=10&sort=newest`, {}),
+        req('Get Member By ID', 'GET', `${api}/members/{{memberId}}`, {}),
+        req('Update Member', 'PUT', `${api}/members/{{memberId}}`, {
+          body: { fullName: 'Rahul Updated' },
+        }),
+        req('Delete Member', 'DELETE', `${api}/members/{{memberId}}`, {}),
+      ],
+    },
+    {
+      name: '05 - Dashboard',
+      item: [req('Get Dashboard Stats', 'GET', `${api}/dashboard/stats/{{libraryId}}`, {})],
+    },
+    {
+      name: '06 - Revenue',
+      item: [
+        req('Revenue Summary', 'GET', `${api}/revenue/summary/{{libraryId}}?filter=this_month`, {}),
+        req('Revenue By Mode', 'GET', `${api}/revenue/by-mode/{{libraryId}}?filter=this_month`, {}),
+        req('Revenue Trend', 'GET', `${api}/revenue/trend/{{libraryId}}`, {}),
+      ],
+    },
+    {
+      name: '07 - Expenses',
+      item: [
+        req('Create Expense', 'POST', `${api}/expenses`, {
+          body: {
+            libraryId: '{{libraryId}}',
+            expenseDate: '2025-05-15T00:00:00.000Z',
+            description: 'Electricity bill',
+            amount: 3500,
+            category: 'electricity',
+          },
+          event: [expenseScript],
+        }),
+        req('Get All Expenses', 'GET', `${api}/expenses?libraryId={{libraryId}}&page=1&limit=10`, {}),
+        req('Expense Summary', 'GET', `${api}/expenses/summary?libraryId={{libraryId}}&filter=this_month`, {}),
+        req('Get Expense By ID', 'GET', `${api}/expenses/{{expenseId}}?libraryId={{libraryId}}`, {}),
+        req('Update Expense', 'PUT', `${api}/expenses/{{expenseId}}?libraryId={{libraryId}}`, {
+          body: { amount: 3800 },
+        }),
+        req('Delete Expense', 'DELETE', `${api}/expenses/{{expenseId}}?libraryId={{libraryId}}`, {}),
+      ],
+    },
+    {
+      name: '08 - Reports',
+      item: [
+        req('Member Report JSON', 'GET', `${api}/reports/members/{{libraryId}}?format=json`, {}),
+        req('Member Report Excel', 'GET', `${api}/reports/members/{{libraryId}}?format=excel`, {}),
+        req('Member Report PDF', 'GET', `${api}/reports/members/{{libraryId}}?format=pdf`, {}),
+      ],
+    },
+    {
+      name: '09 - Subscriptions',
+      item: [
+        req('Get Plans', 'GET', `${api}/subscriptions/plans`, { auth: false }),
+        req('Create Subscription', 'POST', `${api}/subscriptions/create`, {
+          body: { planId: '{{planId}}' },
+        }),
+        req('Get My Subscription', 'GET', `${api}/subscriptions/my`, {}),
+        req('Cancel Subscription', 'POST', `${api}/subscriptions/cancel`, {}),
+      ],
+    },
+  ],
+};
+
+fs.writeFileSync(
+  'postman/Library-Management-System.postman_collection.json',
+  JSON.stringify(collection, null, 2)
+);
+
+fs.writeFileSync(
+  'postman/Library-Management-System.postman_environment.json',
+  JSON.stringify(
+    {
+      id: 'lms-env-v2',
+      name: 'Library Management - Local',
+      values: [
+        { key: 'baseUrl', value: 'http://localhost:5000', enabled: true },
+        { key: 'accessToken', value: '', enabled: true },
+        { key: 'libraryId', value: '', enabled: true },
+        { key: 'qrCodeId', value: '', enabled: true },
+        { key: 'memberId', value: '', enabled: true },
+        { key: 'seatId', value: '', enabled: true },
+        { key: 'expenseId', value: '', enabled: true },
+        { key: 'planId', value: '', enabled: true },
+        { key: 'resetToken', value: '', enabled: true },
+      ],
+      _postman_variable_scope: 'environment',
+    },
+    null,
+    2
+  )
+);
+
+console.log('Postman collection generated successfully');

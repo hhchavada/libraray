@@ -1,0 +1,233 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Library Student Registration</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: 'Segoe UI', system-ui, sans-serif;
+      background: linear-gradient(135deg, #1e3a8a 0%, #3b82f6 50%, #93c5fd 100%);
+      min-height: 100vh;
+      padding: 24px 16px;
+    }
+    .container { max-width: 480px; margin: 0 auto; }
+    .card {
+      background: #fff;
+      border-radius: 16px;
+      box-shadow: 0 20px 60px rgba(0,0,0,0.15);
+      overflow: hidden;
+    }
+    .header {
+      background: #1e3a8a;
+      color: #fff;
+      padding: 24px;
+      text-align: center;
+    }
+    .header h1 { font-size: 1.25rem; margin-bottom: 6px; }
+    .header p { font-size: 0.875rem; opacity: 0.9; }
+    .badge {
+      display: inline-block;
+      background: rgba(255,255,255,0.2);
+      padding: 4px 12px;
+      border-radius: 20px;
+      font-size: 0.75rem;
+      margin-top: 10px;
+    }
+    form { padding: 24px; }
+    .form-group { margin-bottom: 16px; }
+    label {
+      display: block;
+      font-size: 0.875rem;
+      font-weight: 600;
+      color: #374151;
+      margin-bottom: 6px;
+    }
+    label span { color: #ef4444; }
+    input, select, textarea {
+      width: 100%;
+      padding: 12px 14px;
+      border: 1.5px solid #e5e7eb;
+      border-radius: 10px;
+      font-size: 1rem;
+    }
+    input:focus, select:focus, textarea:focus {
+      outline: none;
+      border-color: #2563eb;
+    }
+    .row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+    button {
+      width: 100%;
+      padding: 14px;
+      background: #2563eb;
+      color: #fff;
+      border: none;
+      border-radius: 10px;
+      font-size: 1rem;
+      font-weight: 600;
+      cursor: pointer;
+      margin-top: 8px;
+    }
+    button:hover { background: #1d4ed8; }
+    button:disabled { background: #9ca3af; cursor: not-allowed; }
+    .alert {
+      padding: 12px 16px;
+      border-radius: 10px;
+      margin: 16px 24px 0;
+      font-size: 0.875rem;
+      display: none;
+    }
+    .alert.error { background: #fef2f2; color: #b91c1c; border: 1px solid #fecaca; display: block; }
+    .alert.success { background: #f0fdf4; color: #15803d; border: 1px solid #bbf7d0; display: block; }
+    .loading { text-align: center; padding: 40px; color: #6b7280; }
+    .invalid-qr { text-align: center; padding: 48px 24px; color: #b91c1c; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="card" id="app">
+      <div class="loading">Loading library details...</div>
+    </div>
+  </div>
+
+  <script>
+    const params = new URLSearchParams(window.location.search);
+    const libraryId = params.get('libraryId');
+    const qrCodeId = params.get('qrCodeId');
+    const apiBase = window.location.origin + '/api/v1/public';
+    const app = document.getElementById('app');
+
+    function showError(msg) {
+      app.innerHTML = '<div class="invalid-qr"><h2>Invalid QR Code</h2><p>' + msg + '</p></div>';
+    }
+
+    function formatDate(date) {
+      return date.toISOString().split('T')[0];
+    }
+
+    function defaultEndDate() {
+      const d = new Date();
+      d.setDate(d.getDate() + 7);
+      return formatDate(d);
+    }
+
+    function renderForm(library) {
+      const today = formatDate(new Date());
+      const end = defaultEndDate();
+
+      app.innerHTML = [
+        '<div class="header">',
+        '<h1>', library.libraryName, '</h1>',
+        '<p>', (library.address || ''), '</p>',
+        '<span class="badge">Demo Student Registration</span>',
+        '</div>',
+        '<div id="alert" class="alert"></div>',
+        '<form id="regForm">',
+        '<div class="form-group"><label>Full Name <span>*</span></label>',
+        '<input type="text" name="fullName" required minlength="2" placeholder="Enter your full name" /></div>',
+        '<div class="form-group"><label>Mobile Number <span>*</span></label>',
+        '<input type="tel" name="mobileNumber" required pattern="[0-9]{10}" maxlength="10" placeholder="10 digit mobile" /></div>',
+        '<div class="form-group"><label>Email</label>',
+        '<input type="email" name="email" placeholder="optional@email.com" /></div>',
+        '<div class="form-group"><label>Course / Exam</label>',
+        '<input type="text" name="courseName" placeholder="e.g. UPSC, NEET, JEE" /></div>',
+        '<div class="form-group"><label>Shift <span>*</span></label>',
+        '<select name="shiftType" required>',
+        '<option value="">Select shift</option>',
+        '<option value="morning">Morning</option>',
+        '<option value="evening">Evening</option>',
+        '<option value="full_day">Full Day</option>',
+        '</select></div>',
+        '<div class="row">',
+        '<div class="form-group"><label>Start Date <span>*</span></label>',
+        '<input type="date" name="startDate" required value="', today, '" /></div>',
+        '<div class="form-group"><label>End Date <span>*</span></label>',
+        '<input type="date" name="endDate" required value="', end, '" /></div>',
+        '</div>',
+        '<div class="form-group"><label>Remarks</label>',
+        '<textarea name="remarks" rows="2" placeholder="Any notes (optional)"></textarea></div>',
+        '<button type="submit" id="submitBtn">Register as Demo Student</button>',
+        '</form>'
+      ].join('');
+
+      document.getElementById('regForm').addEventListener('submit', handleSubmit);
+    }
+
+    function showAlert(msg, type) {
+      const el = document.getElementById('alert');
+      el.className = 'alert ' + type;
+      el.textContent = msg;
+    }
+
+    async function handleSubmit(e) {
+      e.preventDefault();
+      const btn = document.getElementById('submitBtn');
+      const fd = new FormData(e.target);
+      btn.disabled = true;
+      btn.textContent = 'Submitting...';
+
+      const payload = {
+        libraryId: libraryId,
+        qrCodeId: qrCodeId,
+        fullName: fd.get('fullName'),
+        mobileNumber: fd.get('mobileNumber'),
+        email: fd.get('email') || '',
+        courseName: fd.get('courseName') || '',
+        shiftType: fd.get('shiftType'),
+        startDate: new Date(fd.get('startDate')).toISOString(),
+        endDate: new Date(fd.get('endDate')).toISOString(),
+        remarks: fd.get('remarks') || ''
+      };
+
+      try {
+        const res = await fetch(apiBase + '/scan/register', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload)
+        });
+        const data = await res.json();
+
+        if (!res.ok) {
+          showAlert(data.message || 'Registration failed', 'error');
+          btn.disabled = false;
+          btn.textContent = 'Register as Demo Student';
+          return;
+        }
+
+        showAlert('Registration successful! Your Member ID: ' + data.data.memberId, 'success');
+        e.target.reset();
+        btn.textContent = 'Registered';
+      } catch (err) {
+        showAlert('Network error. Please try again.', 'error');
+        btn.disabled = false;
+        btn.textContent = 'Register as Demo Student';
+      }
+    }
+
+    async function init() {
+      if (!libraryId || !qrCodeId) {
+        showError('Please scan a valid library QR code.');
+        return;
+      }
+
+      try {
+        const url = apiBase + '/scan/library?libraryId=' + libraryId + '&qrCodeId=' + encodeURIComponent(qrCodeId);
+        const res = await fetch(url);
+        const data = await res.json();
+
+        if (!res.ok) {
+          showError(data.message || 'Invalid QR code');
+          return;
+        }
+
+        renderForm(data.data);
+      } catch (err) {
+        showError('Could not load library. Check your connection.');
+      }
+    }
+
+    init();
+  </script>
+</body>
+</html>

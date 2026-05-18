@@ -1,0 +1,53 @@
+{
+  "name": "express-typescript-mongodb-boilerplate",
+  "version": "1.0.0",
+  "description": "Production-ready Node.js + Express + TypeScript + MongoDB boilerplate with MVC architecture",
+  "main": "dist/server.js",
+  "scripts": {
+    "dev": "ts-node-dev --respawn src/server.ts",
+    "build": "tsc",
+    "start": "node dist/server.js",
+    "lint": "eslint src/**/*.ts"
+  },
+  "keywords": [
+    "express",
+    "typescript",
+    "mongodb",
+    "mongoose",
+    "mvc",
+    "boilerplate"
+  ],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "bcrypt": "^6.0.0",
+    "cookie-parser": "^1.4.7",
+    "dotenv": "^16.3.1",
+    "exceljs": "^4.4.0",
+    "express": "^4.18.2",
+    "http-status-codes": "^2.3.0",
+    "joi": "^17.11.0",
+    "jsonwebtoken": "^9.0.3",
+    "mongoose": "^8.0.3",
+    "nodemailer": "^8.0.7",
+    "pdfkit": "^0.18.0",
+    "razorpay": "^2.9.6"
+  },
+  "devDependencies": {
+    "@types/bcrypt": "^6.0.0",
+    "@types/cookie-parser": "^1.4.10",
+    "@types/express": "^4.17.21",
+    "@types/jsonwebtoken": "^9.0.10",
+    "@types/node": "^20.10.5",
+    "@types/nodemailer": "^8.0.0",
+    "@types/pdfkit": "^0.17.6",
+    "@types/qrcode": "^1.5.6",
+    "@typescript-eslint/eslint-plugin": "^6.15.0",
+    "@typescript-eslint/parser": "^6.15.0",
+    "eslint": "^8.56.0",
+    "prettier": "^3.1.1",
+    "qrcode": "^1.5.4",
+    "ts-node-dev": "^2.0.0",
+    "typescript": "^5.3.3"
+  }
+}

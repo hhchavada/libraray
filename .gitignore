@@ -1,0 +1,76 @@
+# Dependencies
+node_modules/
+
+# Build output
+dist/
+build/
+*.tsbuildinfo
+
+# Environment & secrets (never commit)
+.env
+.env.*
+!.env.example
+
+# Logs
+logs/
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
+
+# Runtime / temp
+tmp/
+temp/
+uploads/
+*.pid
+*.seed
+*.pid.lock
+
+# Test & coverage
+coverage/
+.nyc_output/
+*.lcov
+
+# ESLint / Prettier cache
+.eslintcache
+.prettiercache
+
+# IDE & editors
+.idea/
+.vscode/*
+!.vscode/extensions.json
+!.vscode/settings.json.example
+*.swp
+*.swo
+*~
+.project
+.classpath
+.settings/
+
+# Cursor
+.cursor/
+
+# OS files
+.DS_Store
+.DS_Store?
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+
+# Windows
+$RECYCLE.BIN/
+
+# Optional npm cache
+.npm
+
+# Debug
+*.pem
+
+# Generated reports / exports (if saved locally)
+exports/
+reports/output/
+
+# MongoDB local data (if using local docker volume)
+data/db/
