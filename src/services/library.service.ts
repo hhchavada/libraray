@@ -6,23 +6,102 @@ import { MESSAGES } from '../constants/messages';
 import { SeatStatus } from '../constants/enums';
 import { seatService } from './seat.service';
 import { generateLibraryQrCode } from '../utils/qr.util';
+import {
+  computeSeatMapRows,
+  deriveGridDimensionsFromPlacements,
+  parseGridLabelToIndex,
+  SeatGridPlacement,
+} from '../utils/seatGrid.util';
+
+const DEFAULT_SEAT_MAP_COLUMNS = 12;
 
 export interface CreateLibraryData {
   libraryName: string;
   address: string;
-  totalSeats: number;
+  totalSeats?: number;
   hasCustomSeatMap?: boolean;
+  selectedSeats?: SeatGridPlacement[];
 }
 
+const validateSeatPlacements = (placements: SeatGridPlacement[]): SeatGridPlacement[] => {
+  const seatNumbers = new Set<number>();
+  const cells = new Set<string>();
+
+  for (const placement of placements) {
+    if (!Number.isInteger(placement.seatNumber) || placement.seatNumber < 1) {
+      throw new ApiError(400, MESSAGES.INVALID_SELECTED_SEATS);
+    }
+    if (seatNumbers.has(placement.seatNumber)) {
+      throw new ApiError(400, MESSAGES.INVALID_SELECTED_SEATS);
+    }
+    seatNumbers.add(placement.seatNumber);
+
+    try {
+      parseGridLabelToIndex(placement.column);
+      parseGridLabelToIndex(placement.row);
+
+      const cellKey = `${placement.column.toUpperCase()}-${placement.row.toUpperCase()}`;
+      if (cells.has(cellKey)) {
+        throw new ApiError(400, MESSAGES.DUPLICATE_SEAT_CELL);
+      }
+      cells.add(cellKey);
+    } catch (error) {
+      if (error instanceof ApiError) {
+        throw error;
+      }
+      throw new ApiError(400, MESSAGES.INVALID_SEAT_GRID);
+    }
+  }
+
+  return placements;
+};
+
 export const libraryService = {
-  async createLibrary(data: CreateLibraryData, ownerId: string): Promise<ILibraryDocument> {
+  async createLibrary(data: CreateLibraryData, ownerId: string) {
     const existingLibrary = await Library.findOne({ owner: ownerId });
     if (existingLibrary) {
       throw new ApiError(409, MESSAGES.LIBRARY_ALREADY_EXISTS);
     }
 
+    const useCustomSeatMap =
+      Boolean(data.selectedSeats?.length) || data.hasCustomSeatMap === true;
+
+    let totalSeats: number;
+    let seatMapRows: number;
+    let seatMapColumns: number;
+    let placements: SeatGridPlacement[] | undefined;
+
+    if (useCustomSeatMap) {
+      if (!data.selectedSeats?.length) {
+        throw new ApiError(400, MESSAGES.SELECTED_SEATS_REQUIRED);
+      }
+
+      placements = validateSeatPlacements(data.selectedSeats);
+      totalSeats = placements.length;
+
+      if (data.totalSeats !== undefined && data.totalSeats !== totalSeats) {
+        throw new ApiError(400, MESSAGES.INVALID_SELECTED_SEATS);
+      }
+
+      const gridSize = deriveGridDimensionsFromPlacements(placements);
+      seatMapRows = gridSize.seatMapRows;
+      seatMapColumns = gridSize.seatMapColumns;
+    } else {
+      if (!data.totalSeats || data.totalSeats < 1) {
+        throw new ApiError(400, MESSAGES.VALIDATION_ERROR);
+      }
+      totalSeats = data.totalSeats;
+      seatMapColumns = DEFAULT_SEAT_MAP_COLUMNS;
+      seatMapRows = computeSeatMapRows(totalSeats, seatMapColumns);
+    }
+
     const library = await Library.create({
-      ...data,
+      libraryName: data.libraryName,
+      address: data.address,
+      totalSeats,
+      hasCustomSeatMap: useCustomSeatMap,
+      seatMapColumns,
+      seatMapRows,
       owner: ownerId,
     });
 
@@ -33,9 +112,23 @@ export const libraryService = {
     library.qrCodeImage = qrData.qrCodeImage;
     await library.save();
 
-    await seatService.generateSeats(library._id.toString(), data.totalSeats);
+    if (useCustomSeatMap && placements) {
+      await seatService.createSeatsFromSelection(library._id.toString(), placements);
+    } else {
+      await seatService.generateSeats(library._id.toString(), totalSeats, seatMapColumns);
+    }
 
-    return library;
+    const seats = await Seat.find({ library: library._id }).sort({ seatNumber: 1 });
+
+    return {
+      library,
+      seats,
+      seatMap: {
+        rows: seatMapRows,
+        columns: seatMapColumns,
+        mode: useCustomSeatMap ? 'custom' : 'default',
+      },
+    };
   },
 
   async getLibraryQrCode(ownerId: string) {

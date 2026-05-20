@@ -190,6 +190,7 @@ const collection = {
         req('Verify Email OTP', 'POST', `${api}/auth/verify-email`, {
           auth: false,
           body: { email: 'owner@library.com', otp: '123456' },
+          event: [loginScript],
         }),
         req('Resend OTP', 'POST', `${api}/auth/resend-otp`, {
           auth: false,
@@ -224,11 +225,23 @@ const collection = {
     {
       name: '02 - Library',
       item: [
-        req('Create Library', 'POST', `${api}/library`, {
+        req('Create Library (Default Seats)', 'POST', `${api}/library`, {
           body: {
             libraryName: 'Central Study Library',
             address: '123 Main St, Ahmedabad',
             totalSeats: 50,
+          },
+          event: [libraryScript],
+        }),
+        req('Create Library (Custom Seat Map)', 'POST', `${api}/library`, {
+          body: {
+            libraryName: 'Central Study Library',
+            address: '123 Main St, Ahmedabad',
+            selectedSeats: [
+              { seatNumber: 1, column: 'A', row: 'C' },
+              { seatNumber: 2, column: 'D', row: 'B' },
+              { seatNumber: 3, column: 'E', row: 'F' },
+            ],
           },
           event: [libraryScript],
         }),

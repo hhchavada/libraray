@@ -23,8 +23,16 @@ export const authController = {
 
   verifyEmail: asyncHandler(async (req: Request, res: Response) => {
     const { email, otp } = req.body;
-    const user = await authService.verifyEmail(email, otp);
-    res.status(200).json(new ApiResponse(200, MESSAGES.OTP_VERIFIED, user));
+    const { user, accessToken, refreshToken } = await authService.verifyEmail(email, otp);
+
+    res.cookie(REFRESH_TOKEN_COOKIE, refreshToken, {
+      httpOnly: true,
+      secure: ENV.NODE_ENV === 'production',
+      sameSite: 'strict',
+      maxAge: COOKIE_MAX_AGE,
+    });
+
+    res.status(200).json(new ApiResponse(200, MESSAGES.OTP_VERIFIED, { user, accessToken }));
   }),
 
   resendVerificationOtp: asyncHandler(async (req: Request, res: Response) => {

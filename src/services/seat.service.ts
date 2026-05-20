@@ -4,14 +4,48 @@ import { Member } from '../models/member.model';
 import { ApiError } from '../utils/ApiError';
 import { MESSAGES } from '../constants/messages';
 import { SeatStatus, ShiftType, MemberStatus } from '../constants/enums';
+import {
+  defaultPlacementForSeat,
+  placementToGridFields,
+  SeatGridPlacement,
+} from '../utils/seatGrid.util';
 
 export const seatService = {
-  async generateSeats(libraryId: string, totalSeats: number): Promise<void> {
-    const seats = Array.from({ length: totalSeats }, (_, index) => ({
-      library: libraryId,
-      seatNumber: index + 1,
-      status: SeatStatus.AVAILABLE,
-    }));
+  async generateSeats(libraryId: string, totalSeats: number, seatMapColumns = 12): Promise<void> {
+    const seats = Array.from({ length: totalSeats }, (_, index) => {
+      const seatNumber = index + 1;
+      const grid = defaultPlacementForSeat(seatNumber, seatMapColumns);
+      return {
+        library: libraryId,
+        seatNumber,
+        gridColumn: grid.gridColumn,
+        gridRow: grid.gridRow,
+        gridColumnIndex: grid.gridColumnIndex,
+        gridRowIndex: grid.gridRowIndex,
+        cellLabel: grid.cellLabel,
+        status: SeatStatus.AVAILABLE,
+      };
+    });
+
+    await Seat.insertMany(seats);
+  },
+
+  async createSeatsFromSelection(libraryId: string, placements: SeatGridPlacement[]): Promise<void> {
+    const seats = placements
+      .map((placement) => {
+        const grid = placementToGridFields(placement);
+        return {
+          library: libraryId,
+          seatNumber: grid.seatNumber,
+          gridColumn: grid.gridColumn,
+          gridRow: grid.gridRow,
+          gridColumnIndex: grid.gridColumnIndex,
+          gridRowIndex: grid.gridRowIndex,
+          cellLabel: grid.cellLabel,
+          status: SeatStatus.AVAILABLE,
+        };
+      })
+      .sort((a, b) => a.seatNumber - b.seatNumber);
 
     await Seat.insertMany(seats);
   },

@@ -7,8 +7,8 @@ import { getAuthUserId } from '../utils/auth.util';
 
 export const libraryController = {
   create: asyncHandler(async (req: Request, res: Response) => {
-    const library = await libraryService.createLibrary(req.body, getAuthUserId(req));
-    res.status(201).json(new ApiResponse(201, MESSAGES.LIBRARY_CREATED, library));
+    const result = await libraryService.createLibrary(req.body, getAuthUserId(req));
+    res.status(201).json(new ApiResponse(201, MESSAGES.LIBRARY_CREATED, result));
   }),
 
   getMyLibrary: asyncHandler(async (req: Request, res: Response) => {

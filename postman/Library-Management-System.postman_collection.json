@@ -163,7 +163,23 @@
             "auth": {
               "type": "noauth"
             }
-          }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "if (pm.response.code === 200) {",
+                  "  const res = pm.response.json();",
+                  "  if (res.data && res.data.accessToken) {",
+                  "    pm.collectionVariables.set('accessToken', res.data.accessToken);",
+                  "  }",
+                  "}"
+                ]
+              }
+            }
+          ]
         },
         {
           "name": "Resend OTP",
@@ -338,7 +354,7 @@
       "name": "02 - Library",
       "item": [
         {
-          "name": "Create Library",
+          "name": "Create Library (Default Seats)",
           "request": {
             "method": "POST",
             "header": [
@@ -352,6 +368,43 @@
             "body": {
               "mode": "raw",
               "raw": "{\n  \"libraryName\": \"Central Study Library\",\n  \"address\": \"123 Main St, Ahmedabad\",\n  \"totalSeats\": 50\n}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "if (pm.response.code === 201 || pm.response.code === 200) {",
+                  "  const res = pm.response.json();",
+                  "  if (res.data && res.data._id) {",
+                  "    pm.collectionVariables.set('libraryId', res.data._id);",
+                  "  }",
+                  "  if (res.data && res.data.qrCodeId) {",
+                  "    pm.collectionVariables.set('qrCodeId', res.data.qrCodeId);",
+                  "  }",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Create Library (Custom Seat Map)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/api/v1/library",
+            "description": "",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"libraryName\": \"Central Study Library\",\n  \"address\": \"123 Main St, Ahmedabad\",\n  \"selectedSeats\": [\n    {\n      \"seatNumber\": 1,\n      \"column\": \"A\",\n      \"row\": \"C\"\n    },\n    {\n      \"seatNumber\": 2,\n      \"column\": \"D\",\n      \"row\": \"B\"\n    },\n    {\n      \"seatNumber\": 3,\n      \"column\": \"E\",\n      \"row\": \"F\"\n    }\n  ]\n}"
             }
           },
           "event": [

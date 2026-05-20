@@ -13,6 +13,9 @@ import {
 } from '../utils/token';
 import { UserRole, OtpType } from '../constants/enums';
 import { otpService } from './otp.service';
+import { logger } from '../utils/logger';
+
+const LOG_TAG = 'AUTH';
 
 export interface RegisterUserData {
   fullName: string;
@@ -26,6 +29,29 @@ const sanitizeUser = (user: IUserDocument) => {
   delete userObj.password;
   delete userObj.refreshToken;
   return userObj;
+};
+
+const issueAuthTokens = async (user: IUserDocument) => {
+  if (!user.isActive) {
+    throw new ApiError(403, MESSAGES.USER_INACTIVE);
+  }
+
+  const accessToken = generateAccessToken({
+    id: user._id.toString(),
+    role: user.role,
+    email: user.email,
+  });
+
+  const refreshToken = generateRefreshToken(user._id.toString());
+
+  user.refreshToken = refreshToken;
+  await user.save({ validateBeforeSave: false });
+
+  return {
+    user: sanitizeUser(user),
+    accessToken,
+    refreshToken,
+  };
 };
 
 export const authService = {
@@ -51,27 +77,28 @@ export const authService = {
       isEmailVerified: false,
     });
 
+    logger.info(LOG_TAG, 'Register success — sending verification OTP', {
+      email: logger.maskEmail(user.email),
+    });
+
     await otpService.createAndSendOtp(user.email, OtpType.EMAIL_VERIFICATION);
 
     return sanitizeUser(user);
   },
 
   async verifyEmail(email: string, otp: string) {
-    const user = await User.findOne({ email: email.toLowerCase() });
+    const user = await User.findOne({ email: email.toLowerCase() }).select('+refreshToken');
     if (!user) {
       throw new ApiError(404, MESSAGES.USER_NOT_FOUND);
     }
 
-    if (user.isEmailVerified) {
-      return sanitizeUser(user);
+    if (!user.isEmailVerified) {
+      await otpService.verifyOtp(email, otp, OtpType.EMAIL_VERIFICATION);
+      user.isEmailVerified = true;
+      await user.save();
     }
 
-    await otpService.verifyOtp(email, otp, OtpType.EMAIL_VERIFICATION);
-
-    user.isEmailVerified = true;
-    await user.save();
-
-    return sanitizeUser(user);
+    return issueAuthTokens(user);
   },
 
   async resendVerificationOtp(email: string) {
@@ -84,11 +111,21 @@ export const authService = {
       throw new ApiError(400, MESSAGES.EMAIL_ALREADY_VERIFIED);
     }
 
+    logger.info(LOG_TAG, 'Resend verification OTP requested', {
+      email: logger.maskEmail(user.email),
+    });
+
     await otpService.createAndSendOtp(user.email, OtpType.EMAIL_VERIFICATION);
   },
 
   async forgotPassword(email: string) {
-    const user = await User.findOne({ email: email.toLowerCase() });
+    const normalizedEmail = email.toLowerCase();
+    const user = await User.findOne({ email: normalizedEmail });
+
+    logger.info(LOG_TAG, 'Forgot password requested', {
+      email: logger.maskEmail(normalizedEmail),
+      userFound: Boolean(user),
+    });
 
     if (user) {
       await otpService.createAndSendOtp(user.email, OtpType.FORGOT_PASSWORD);
@@ -154,22 +191,7 @@ export const authService = {
       throw new ApiError(401, MESSAGES.INVALID_CREDENTIALS);
     }
 
-    const accessToken = generateAccessToken({
-      id: user._id.toString(),
-      role: user.role,
-      email: user.email,
-    });
-
-    const refreshToken = generateRefreshToken(user._id.toString());
-
-    user.refreshToken = refreshToken;
-    await user.save({ validateBeforeSave: false });
-
-    return {
-      user: sanitizeUser(user),
-      accessToken,
-      refreshToken,
-    };
+    return issueAuthTokens(user);
   },
 
   async refreshAccessToken(refreshToken: string) {
