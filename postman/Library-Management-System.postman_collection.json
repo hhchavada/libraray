@@ -367,7 +367,7 @@
             "description": "",
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"libraryName\": \"Central Study Library\",\n  \"address\": \"123 Main St, Ahmedabad\",\n  \"totalSeats\": 50\n}"
+              "raw": "{\n  \"libraryName\": \"Central Study Library\",\n  \"address\": \"123 Main St, Ahmedabad\",\n  \"seatMapType\": \"default\",\n  \"totalSeats\": 50\n}"
             }
           },
           "event": [
@@ -391,7 +391,7 @@
           ]
         },
         {
-          "name": "Create Library (Custom Seat Map)",
+          "name": "Create Library (Custom Seats)",
           "request": {
             "method": "POST",
             "header": [
@@ -404,7 +404,7 @@
             "description": "",
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"libraryName\": \"Central Study Library\",\n  \"address\": \"123 Main St, Ahmedabad\",\n  \"selectedSeats\": [\n    {\n      \"seatNumber\": 1,\n      \"column\": \"A\",\n      \"row\": \"C\"\n    },\n    {\n      \"seatNumber\": 2,\n      \"column\": \"D\",\n      \"row\": \"B\"\n    },\n    {\n      \"seatNumber\": 3,\n      \"column\": \"E\",\n      \"row\": \"F\"\n    }\n  ]\n}"
+              "raw": "{\n  \"libraryName\": \"Central Study Library\",\n  \"address\": \"123 Main St, Ahmedabad\",\n  \"seatMapType\": \"custom\",\n  \"selectedSeats\": [\n    {\n      \"seatNumber\": 1,\n      \"row\": \"C\",\n      \"column\": \"A\"\n    },\n    {\n      \"seatNumber\": 2,\n      \"row\": \"B\",\n      \"column\": \"D\"\n    },\n    {\n      \"seatNumber\": 3,\n      \"row\": \"F\",\n      \"column\": \"E\"\n    }\n  ]\n}"
             }
           },
           "event": [

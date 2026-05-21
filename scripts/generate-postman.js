@@ -229,18 +229,20 @@ const collection = {
           body: {
             libraryName: 'Central Study Library',
             address: '123 Main St, Ahmedabad',
+            seatMapType: 'default',
             totalSeats: 50,
           },
           event: [libraryScript],
         }),
-        req('Create Library (Custom Seat Map)', 'POST', `${api}/library`, {
+        req('Create Library (Custom Seats)', 'POST', `${api}/library`, {
           body: {
             libraryName: 'Central Study Library',
             address: '123 Main St, Ahmedabad',
+            seatMapType: 'custom',
             selectedSeats: [
-              { seatNumber: 1, column: 'A', row: 'C' },
-              { seatNumber: 2, column: 'D', row: 'B' },
-              { seatNumber: 3, column: 'E', row: 'F' },
+              { seatNumber: 1, row: 'C', column: 'A' },
+              { seatNumber: 2, row: 'B', column: 'D' },
+              { seatNumber: 3, row: 'F', column: 'E' },
             ],
           },
           event: [libraryScript],

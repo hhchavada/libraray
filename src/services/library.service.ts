@@ -15,11 +15,13 @@ import {
 
 const DEFAULT_SEAT_MAP_COLUMNS = 12;
 
+export type SeatMapType = 'default' | 'custom';
+
 export interface CreateLibraryData {
   libraryName: string;
   address: string;
+  seatMapType: SeatMapType;
   totalSeats?: number;
-  hasCustomSeatMap?: boolean;
   selectedSeats?: SeatGridPlacement[];
 }
 
@@ -63,8 +65,7 @@ export const libraryService = {
       throw new ApiError(409, MESSAGES.LIBRARY_ALREADY_EXISTS);
     }
 
-    const useCustomSeatMap =
-      Boolean(data.selectedSeats?.length) || data.hasCustomSeatMap === true;
+    const useCustomSeatMap = data.seatMapType === 'custom';
 
     let totalSeats: number;
     let seatMapRows: number;
@@ -72,16 +73,8 @@ export const libraryService = {
     let placements: SeatGridPlacement[] | undefined;
 
     if (useCustomSeatMap) {
-      if (!data.selectedSeats?.length) {
-        throw new ApiError(400, MESSAGES.SELECTED_SEATS_REQUIRED);
-      }
-
-      placements = validateSeatPlacements(data.selectedSeats);
+      placements = validateSeatPlacements(data.selectedSeats!);
       totalSeats = placements.length;
-
-      if (data.totalSeats !== undefined && data.totalSeats !== totalSeats) {
-        throw new ApiError(400, MESSAGES.INVALID_SELECTED_SEATS);
-      }
 
       const gridSize = deriveGridDimensionsFromPlacements(placements);
       seatMapRows = gridSize.seatMapRows;
@@ -124,9 +117,9 @@ export const libraryService = {
       library,
       seats,
       seatMap: {
+        type: data.seatMapType,
         rows: seatMapRows,
         columns: seatMapColumns,
-        mode: useCustomSeatMap ? 'custom' : 'default',
       },
     };
   },
