@@ -1,7 +1,7 @@
 import 'dotenv/config';
 import { emailService } from '../src/services/email.service';
 
-const email = process.argv[2] || 'abb89a001@smtp-brevo.com';
+const email = process.argv[2] || 'harshchavada174@gmail.com';
 const otp = Math.floor(100000 + Math.random() * 900000).toString();
 
 emailService
