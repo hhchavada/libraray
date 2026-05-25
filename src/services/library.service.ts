@@ -9,7 +9,7 @@ import { generateLibraryQrCode } from '../utils/qr.util';
 import {
   computeSeatMapRows,
   deriveGridDimensionsFromPlacements,
-  parseGridLabelToIndex,
+  isValidGridIndex,
   SeatGridPlacement,
 } from '../utils/seatGrid.util';
 
@@ -38,21 +38,15 @@ const validateSeatPlacements = (placements: SeatGridPlacement[]): SeatGridPlacem
     }
     seatNumbers.add(placement.seatNumber);
 
-    try {
-      parseGridLabelToIndex(placement.column);
-      parseGridLabelToIndex(placement.row);
-
-      const cellKey = `${placement.column.toUpperCase()}-${placement.row.toUpperCase()}`;
-      if (cells.has(cellKey)) {
-        throw new ApiError(400, MESSAGES.DUPLICATE_SEAT_CELL);
-      }
-      cells.add(cellKey);
-    } catch (error) {
-      if (error instanceof ApiError) {
-        throw error;
-      }
+    if (!isValidGridIndex(placement.row) || !isValidGridIndex(placement.column)) {
       throw new ApiError(400, MESSAGES.INVALID_SEAT_GRID);
     }
+
+    const cellKey = `${placement.column}-${placement.row}`;
+    if (cells.has(cellKey)) {
+      throw new ApiError(400, MESSAGES.DUPLICATE_SEAT_CELL);
+    }
+    cells.add(cellKey);
   }
 
   return placements;

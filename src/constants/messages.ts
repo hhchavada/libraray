@@ -44,7 +44,7 @@ export const MESSAGES = {
   LIBRARY_QR_GENERATED: 'Library QR code generated successfully',
   SELECTED_SEATS_REQUIRED: 'Selected seats are required when custom seat map is enabled',
   INVALID_SELECTED_SEATS: 'Selected seats must be unique positive numbers',
-  INVALID_SEAT_GRID: 'Invalid seat grid row/column. Use Excel-style labels (e.g. column A, row 3)',
+  INVALID_SEAT_GRID: 'Invalid seat grid row/column. Both must be numbers between 0 and 25',
   DUPLICATE_SEAT_CELL: 'Two seats cannot use the same grid cell',
   SEAT_MAP_GRID_REQUIRED: 'seatMapRows and seatMapColumns are required for custom seat map',
   INVALID_QR_CODE: 'Invalid or expired QR code',

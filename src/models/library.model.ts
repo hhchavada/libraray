@@ -5,7 +5,7 @@ export interface ILibrary {
   address: string;
   totalSeats: number;
   hasCustomSeatMap: boolean;
-  /** Grid width for seat map UI (e.g. 12 columns = A–L) */
+  /** Grid width for seat map UI (0-based indices 0..seatMapColumns-1) */
   seatMapColumns?: number;
   /** Grid height for seat map UI */
   seatMapRows?: number;
@@ -44,13 +44,13 @@ const librarySchema = new Schema<ILibraryDocument>(
     seatMapColumns: {
       type: Number,
       min: 1,
-      max: 52,
+      max: 26,
       default: 12,
     },
     seatMapRows: {
       type: Number,
       min: 1,
-      max: 100,
+      max: 26,
     },
     owner: {
       type: Schema.Types.ObjectId,

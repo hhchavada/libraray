@@ -1,10 +1,11 @@
 import Joi from 'joi';
+import { GRID_INDEX_MAX, GRID_INDEX_MIN } from '../utils/seatGrid.util';
 
-/** FE sends: seatNumber, row, column per selected seat */
+/** FE sends: seatNumber, row (0–25), column (0–25) */
 const seatPlacementSchema = Joi.object({
   seatNumber: Joi.number().integer().min(1).required(),
-  row: Joi.string().trim().uppercase().min(1).max(3).required(),
-  column: Joi.string().trim().uppercase().min(1).max(3).required(),
+  row: Joi.number().integer().min(GRID_INDEX_MIN).max(GRID_INDEX_MAX).required(),
+  column: Joi.number().integer().min(GRID_INDEX_MIN).max(GRID_INDEX_MAX).required(),
 });
 
 export const libraryValidation = {

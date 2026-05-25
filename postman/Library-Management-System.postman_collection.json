@@ -404,7 +404,7 @@
             "description": "",
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"libraryName\": \"Central Study Library\",\n  \"address\": \"123 Main St, Ahmedabad\",\n  \"seatMapType\": \"custom\",\n  \"selectedSeats\": [\n    {\n      \"seatNumber\": 1,\n      \"row\": \"C\",\n      \"column\": \"A\"\n    },\n    {\n      \"seatNumber\": 2,\n      \"row\": \"B\",\n      \"column\": \"D\"\n    },\n    {\n      \"seatNumber\": 3,\n      \"row\": \"F\",\n      \"column\": \"E\"\n    }\n  ]\n}"
+              "raw": "{\n  \"libraryName\": \"Central Study Library\",\n  \"address\": \"123 Main St, Ahmedabad\",\n  \"seatMapType\": \"custom\",\n  \"selectedSeats\": [\n    {\n      \"seatNumber\": 1,\n      \"row\": 2,\n      \"column\": 0\n    },\n    {\n      \"seatNumber\": 2,\n      \"row\": 1,\n      \"column\": 3\n    },\n    {\n      \"seatNumber\": 3,\n      \"row\": 5,\n      \"column\": 4\n    }\n  ]\n}"
             }
           },
           "event": [

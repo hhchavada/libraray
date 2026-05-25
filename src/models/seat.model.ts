@@ -4,13 +4,13 @@ import { SeatStatus, ShiftType } from '../constants/enums';
 export interface ISeat {
   library: Types.ObjectId;
   seatNumber: number;
-  /** Excel-style column label e.g. A, D */
+  /** Grid column index 0–25 (stored as string) */
   gridColumn?: string | null;
-  /** Excel-style row label e.g. 3, C */
+  /** Grid row index 0–25 (stored as string) */
   gridRow?: string | null;
   gridColumnIndex?: number | null;
   gridRowIndex?: number | null;
-  /** Display label e.g. A-C, D-B */
+  /** Display label e.g. 5-3 (column-row) */
   cellLabel?: string | null;
   status: SeatStatus;
   assignedTo?: Types.ObjectId | null;
@@ -36,13 +36,11 @@ const seatSchema = new Schema<ISeatDocument>(
     gridColumn: {
       type: String,
       trim: true,
-      uppercase: true,
       default: null,
     },
     gridRow: {
       type: String,
       trim: true,
-      uppercase: true,
       default: null,
     },
     gridColumnIndex: {

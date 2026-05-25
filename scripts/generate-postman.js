@@ -240,9 +240,9 @@ const collection = {
             address: '123 Main St, Ahmedabad',
             seatMapType: 'custom',
             selectedSeats: [
-              { seatNumber: 1, row: 'C', column: 'A' },
-              { seatNumber: 2, row: 'B', column: 'D' },
-              { seatNumber: 3, row: 'F', column: 'E' },
+              { seatNumber: 1, row: 2, column: 0 },
+              { seatNumber: 2, row: 1, column: 3 },
+              { seatNumber: 3, row: 5, column: 4 },
             ],
           },
           event: [libraryScript],
