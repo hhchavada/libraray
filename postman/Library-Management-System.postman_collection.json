@@ -591,7 +591,7 @@
       "name": "04 - Members",
       "item": [
         {
-          "name": "Create Permanent Member",
+          "name": "Create Member (Permanent)",
           "request": {
             "method": "POST",
             "header": [
@@ -600,11 +600,11 @@
                 "value": "application/json"
               }
             ],
-            "url": "{{baseUrl}}/api/v1/members/permanent",
+            "url": "{{baseUrl}}/api/v1/members",
             "description": "",
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"fullName\": \"Rahul Sharma\",\n  \"mobileNumber\": \"9123456789\",\n  \"memberType\": \"permanent\",\n  \"membershipPlan\": \"monthly\",\n  \"shiftType\": \"morning\",\n  \"startDate\": \"2025-05-01T00:00:00.000Z\",\n  \"endDate\": \"2025-06-01T00:00:00.000Z\",\n  \"feePerMonth\": 2000,\n  \"discount\": 10,\n  \"paymentStatus\": \"partial\",\n  \"paymentMode\": \"upi\",\n  \"amountPaid\": 1500,\n  \"seatId\": \"{{seatId}}\"\n}"
+              "raw": "{\n  \"type\": \"permanent\",\n  \"fullName\": \"Rahul Sharma\",\n  \"mobileNumber\": \"9123456789\",\n  \"membershipPlan\": \"monthly\",\n  \"shiftType\": \"morning\",\n  \"startDate\": \"2025-05-01T00:00:00.000Z\",\n  \"endDate\": \"2025-06-01T00:00:00.000Z\",\n  \"feePerMonth\": 2000,\n  \"discount\": 10,\n  \"paymentStatus\": \"partial\",\n  \"paymentMode\": \"upi\",\n  \"amountPaid\": 1500,\n  \"seatId\": \"{{seatId}}\"\n}"
             }
           },
           "event": [
@@ -625,7 +625,7 @@
           ]
         },
         {
-          "name": "Create Demo Member",
+          "name": "Create Member (Demo)",
           "request": {
             "method": "POST",
             "header": [
@@ -634,11 +634,11 @@
                 "value": "application/json"
               }
             ],
-            "url": "{{baseUrl}}/api/v1/members/demo",
+            "url": "{{baseUrl}}/api/v1/members",
             "description": "",
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"fullName\": \"Demo Student\",\n  \"mobileNumber\": \"9988776655\",\n  \"memberType\": \"demo\",\n  \"shiftType\": \"evening\",\n  \"startDate\": \"2025-05-01T00:00:00.000Z\",\n  \"endDate\": \"2025-05-07T00:00:00.000Z\"\n}"
+              "raw": "{\n  \"type\": \"demo\",\n  \"fullName\": \"Demo Student\",\n  \"mobileNumber\": \"9988776655\",\n  \"shiftType\": \"evening\",\n  \"startDate\": \"2025-05-01T00:00:00.000Z\",\n  \"endDate\": \"2025-05-07T00:00:00.000Z\"\n}"
             }
           },
           "event": [
@@ -659,7 +659,7 @@
           ]
         },
         {
-          "name": "Create Member Without Seat",
+          "name": "Create Member (Without Seat)",
           "request": {
             "method": "POST",
             "header": [
@@ -668,11 +668,11 @@
                 "value": "application/json"
               }
             ],
-            "url": "{{baseUrl}}/api/v1/members/without-seat",
+            "url": "{{baseUrl}}/api/v1/members",
             "description": "",
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"fullName\": \"Priya Patel\",\n  \"mobileNumber\": \"9111222333\",\n  \"memberType\": \"without_seat\",\n  \"membershipPlan\": \"quarterly\",\n  \"shiftType\": \"full_day\",\n  \"startDate\": \"2025-05-01T00:00:00.000Z\",\n  \"endDate\": \"2025-08-01T00:00:00.000Z\",\n  \"feePerMonth\": 1500,\n  \"paymentStatus\": \"paid\",\n  \"paymentMode\": \"cash\",\n  \"amountPaid\": 4500\n}"
+              "raw": "{\n  \"type\": \"without-seat\",\n  \"fullName\": \"Priya Patel\",\n  \"mobileNumber\": \"9111222333\",\n  \"membershipPlan\": \"quarterly\",\n  \"shiftType\": \"full_day\",\n  \"startDate\": \"2025-05-01T00:00:00.000Z\",\n  \"endDate\": \"2025-08-01T00:00:00.000Z\",\n  \"feePerMonth\": 1500,\n  \"paymentStatus\": \"paid\",\n  \"paymentMode\": \"cash\",\n  \"amountPaid\": 4500\n}"
             }
           }
         },

@@ -13,21 +13,9 @@ const getOwnerLibraryId = async (ownerId: string): Promise<string> => {
 };
 
 export const memberController = {
-  createPermanent: asyncHandler(async (req: Request, res: Response) => {
+  createMember: asyncHandler(async (req: Request, res: Response) => {
     const libraryId = await getOwnerLibraryId(getAuthUserId(req));
-    const member = await memberService.createPermanentMember(req.body, libraryId);
-    res.status(201).json(new ApiResponse(201, MESSAGES.MEMBER_CREATED, member));
-  }),
-
-  createDemo: asyncHandler(async (req: Request, res: Response) => {
-    const libraryId = await getOwnerLibraryId(getAuthUserId(req));
-    const member = await memberService.createDemoMember(req.body, libraryId);
-    res.status(201).json(new ApiResponse(201, MESSAGES.MEMBER_CREATED, member));
-  }),
-
-  createWithoutSeat: asyncHandler(async (req: Request, res: Response) => {
-    const libraryId = await getOwnerLibraryId(getAuthUserId(req));
-    const member = await memberService.createMemberWithoutSeat(req.body, libraryId);
+    const member = await memberService.createMember(req.body, libraryId);
     res.status(201).json(new ApiResponse(201, MESSAGES.MEMBER_CREATED, member));
   }),
 

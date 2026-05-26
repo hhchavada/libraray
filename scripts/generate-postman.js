@@ -270,11 +270,11 @@ const collection = {
     {
       name: '04 - Members',
       item: [
-        req('Create Permanent Member', 'POST', `${api}/members/permanent`, {
+        req('Create Member (Permanent)', 'POST', `${api}/members`, {
           body: {
+            type: 'permanent',
             fullName: 'Rahul Sharma',
             mobileNumber: '9123456789',
-            memberType: 'permanent',
             membershipPlan: 'monthly',
             shiftType: 'morning',
             startDate: '2025-05-01T00:00:00.000Z',
@@ -288,22 +288,22 @@ const collection = {
           },
           event: [memberScript],
         }),
-        req('Create Demo Member', 'POST', `${api}/members/demo`, {
+        req('Create Member (Demo)', 'POST', `${api}/members`, {
           body: {
+            type: 'demo',
             fullName: 'Demo Student',
             mobileNumber: '9988776655',
-            memberType: 'demo',
             shiftType: 'evening',
             startDate: '2025-05-01T00:00:00.000Z',
             endDate: '2025-05-07T00:00:00.000Z',
           },
           event: [memberScript],
         }),
-        req('Create Member Without Seat', 'POST', `${api}/members/without-seat`, {
+        req('Create Member (Without Seat)', 'POST', `${api}/members`, {
           body: {
+            type: 'without-seat',
             fullName: 'Priya Patel',
             mobileNumber: '9111222333',
-            memberType: 'without_seat',
             membershipPlan: 'quarterly',
             shiftType: 'full_day',
             startDate: '2025-05-01T00:00:00.000Z',

@@ -8,17 +8,7 @@ const router = Router();
 
 router.use(protect);
 
-router.post(
-  '/permanent',
-  validate(memberValidation.createPermanentMember),
-  memberController.createPermanent
-);
-router.post('/demo', validate(memberValidation.createDemoMember), memberController.createDemo);
-router.post(
-  '/without-seat',
-  validate(memberValidation.createMemberWithoutSeat),
-  memberController.createWithoutSeat
-);
+router.post('/', validate(memberValidation.createMember), memberController.createMember);
 router.get('/', memberController.getAllMembers);
 router.get('/:id', memberController.getMemberById);
 router.put('/:id', validate(memberValidation.updateMember), memberController.updateMember);

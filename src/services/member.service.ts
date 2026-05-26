@@ -64,6 +64,27 @@ export interface CreateDemoMemberData {
   remarks?: string;
 }
 
+export type CreateMemberType = 'permanent' | 'demo' | 'without-seat';
+
+export interface CreateMemberData {
+  type: CreateMemberType;
+  fullName: string;
+  mobileNumber: string;
+  email?: string;
+  courseName?: string;
+  shiftType: ShiftType;
+  startDate: Date;
+  endDate: Date;
+  remarks?: string;
+  membershipPlan?: MembershipPlan;
+  feePerMonth?: number;
+  discount?: number;
+  paymentStatus?: PaymentStatus;
+  paymentMode?: string;
+  amountPaid?: number;
+  seatId?: string;
+}
+
 const calculateFees = (data: {
   feePerMonth: number;
   discount?: number;
@@ -103,6 +124,71 @@ const buildSortQuery = (sort?: MemberSortOption): Record<string, 1 | -1> => {
 };
 
 export const memberService = {
+  async createMember(data: CreateMemberData, libraryId: string): Promise<IMemberDocument> {
+    switch (data.type) {
+      case 'permanent':
+        return this.createPermanentMember(
+          {
+            fullName: data.fullName,
+            mobileNumber: data.mobileNumber,
+            email: data.email,
+            courseName: data.courseName,
+            memberType: MemberType.PERMANENT,
+            membershipPlan: data.membershipPlan!,
+            shiftType: data.shiftType,
+            startDate: data.startDate,
+            endDate: data.endDate,
+            feePerMonth: data.feePerMonth!,
+            discount: data.discount,
+            paymentStatus: data.paymentStatus!,
+            paymentMode: data.paymentMode!,
+            amountPaid: data.amountPaid!,
+            seatId: data.seatId,
+            remarks: data.remarks,
+          },
+          libraryId
+        );
+      case 'demo':
+        return this.createDemoMember(
+          {
+            fullName: data.fullName,
+            mobileNumber: data.mobileNumber,
+            email: data.email,
+            courseName: data.courseName,
+            memberType: MemberType.DEMO,
+            shiftType: data.shiftType,
+            startDate: data.startDate,
+            endDate: data.endDate,
+            remarks: data.remarks,
+          },
+          libraryId
+        );
+      case 'without-seat':
+        return this.createMemberWithoutSeat(
+          {
+            fullName: data.fullName,
+            mobileNumber: data.mobileNumber,
+            email: data.email,
+            courseName: data.courseName,
+            memberType: MemberType.WITHOUT_SEAT,
+            membershipPlan: data.membershipPlan!,
+            shiftType: data.shiftType,
+            startDate: data.startDate,
+            endDate: data.endDate,
+            feePerMonth: data.feePerMonth!,
+            discount: data.discount,
+            paymentStatus: data.paymentStatus!,
+            paymentMode: data.paymentMode!,
+            amountPaid: data.amountPaid!,
+            remarks: data.remarks,
+          },
+          libraryId
+        );
+      default:
+        throw new ApiError(400, MESSAGES.VALIDATION_ERROR);
+    }
+  },
+
   async generateMemberId(libraryId: string): Promise<string> {
     const count = await Member.countDocuments({ library: libraryId });
     const paddedNumber = String(count + 1).padStart(4, '0');

@@ -1,12 +1,13 @@
 import Joi from 'joi';
 import {
-  MemberType,
   ShiftType,
   PaymentStatus,
   PaymentMode,
   MembershipPlan,
   MemberStatus,
 } from '../constants/enums';
+
+const MEMBER_TYPES = ['permanent', 'demo', 'without-seat'] as const;
 
 const baseMemberFields = {
   fullName: Joi.string().required(),
@@ -23,36 +24,53 @@ const baseMemberFields = {
   remarks: Joi.string().optional(),
 };
 
-const permanentFields = {
-  ...baseMemberFields,
-  memberType: Joi.string().valid(MemberType.PERMANENT).required(),
-  membershipPlan: Joi.string()
-    .valid(...Object.values(MembershipPlan))
-    .required(),
-  feePerMonth: Joi.number().positive().required(),
-  discount: Joi.number().min(0).max(100).optional(),
-  paymentStatus: Joi.string()
-    .valid(...Object.values(PaymentStatus))
-    .required(),
-  paymentMode: Joi.string()
-    .valid(...Object.values(PaymentMode))
-    .required(),
-  amountPaid: Joi.number().min(0).required(),
-  seatId: Joi.string().hex().length(24).optional(),
-};
-
 export const memberValidation = {
-  createPermanentMember: Joi.object(permanentFields),
-
-  createDemoMember: Joi.object({
+  createMember: Joi.object({
+    type: Joi.string()
+      .valid(...MEMBER_TYPES)
+      .required(),
     ...baseMemberFields,
-    memberType: Joi.string().valid(MemberType.DEMO).required(),
-  }),
-
-  createMemberWithoutSeat: Joi.object({
-    ...permanentFields,
-    memberType: Joi.string().valid(MemberType.WITHOUT_SEAT).required(),
-    seatId: Joi.forbidden(),
+    membershipPlan: Joi.when('type', {
+      is: 'demo',
+      then: Joi.forbidden(),
+      otherwise: Joi.string()
+        .valid(...Object.values(MembershipPlan))
+        .required(),
+    }),
+    feePerMonth: Joi.when('type', {
+      is: 'demo',
+      then: Joi.forbidden(),
+      otherwise: Joi.number().positive().required(),
+    }),
+    discount: Joi.when('type', {
+      is: 'demo',
+      then: Joi.forbidden(),
+      otherwise: Joi.number().min(0).max(100).optional(),
+    }),
+    paymentStatus: Joi.when('type', {
+      is: 'demo',
+      then: Joi.forbidden(),
+      otherwise: Joi.string()
+        .valid(...Object.values(PaymentStatus))
+        .required(),
+    }),
+    paymentMode: Joi.when('type', {
+      is: 'demo',
+      then: Joi.forbidden(),
+      otherwise: Joi.string()
+        .valid(...Object.values(PaymentMode))
+        .required(),
+    }),
+    amountPaid: Joi.when('type', {
+      is: 'demo',
+      then: Joi.forbidden(),
+      otherwise: Joi.number().min(0).required(),
+    }),
+    seatId: Joi.when('type', {
+      is: 'permanent',
+      then: Joi.string().hex().length(24).optional(),
+      otherwise: Joi.forbidden(),
+    }),
   }),
 
   updateMember: Joi.object({
