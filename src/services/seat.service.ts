@@ -9,6 +9,53 @@ import {
   placementToGridFields,
   SeatGridPlacement,
 } from '../utils/seatGrid.util';
+import {
+  countMemberShiftOccupancy,
+  isSeatAvailableForShift,
+  ShiftSeatStats,
+} from '../utils/seatShift.util';
+
+const getActiveBookedShifts = async (seatId: string): Promise<ShiftType[]> => {
+  const activeMembers = await Member.find({
+    seat: seatId,
+    status: MemberStatus.ACTIVE,
+  }).select('shiftType');
+
+  return activeMembers.map((m) => m.shiftType);
+};
+
+const attachSeatBookings = async (seats: ISeatDocument[]) => {
+  const seatIds = seats.map((s) => s._id);
+
+  const members = await Member.find({
+    seat: { $in: seatIds },
+    status: MemberStatus.ACTIVE,
+  }).select('seat shiftType fullName memberId');
+
+  const bySeat = new Map<string, Array<{ memberId: string; fullName: string; shiftType: ShiftType }>>();
+
+  for (const member of members) {
+    const seatKey = member.seat!.toString();
+    const list = bySeat.get(seatKey) ?? [];
+    list.push({
+      memberId: member.memberId,
+      fullName: member.fullName,
+      shiftType: member.shiftType,
+    });
+    bySeat.set(seatKey, list);
+  }
+
+  return seats.map((seat) => {
+    const bookings = bySeat.get(seat._id.toString()) ?? [];
+    const seatObj = seat.toObject() as ISeatDocument & {
+      bookings: Array<{ memberId: string; fullName: string; shiftType: ShiftType }>;
+      bookedShifts: ShiftType[];
+    };
+    seatObj.bookings = bookings;
+    seatObj.bookedShifts = bookings.map((b) => b.shiftType);
+    return seatObj;
+  });
+};
 
 export const seatService = {
   async generateSeats(libraryId: string, totalSeats: number, seatMapColumns = 12): Promise<void> {
@@ -50,17 +97,14 @@ export const seatService = {
     await Seat.insertMany(seats);
   },
 
-  async getAllSeats(libraryId: string): Promise<ISeatDocument[]> {
-    return Seat.find({ library: libraryId }).sort({ seatNumber: 1 }).populate('assignedTo', 'fullName memberId');
+  async getAllSeats(libraryId: string) {
+    const seats = await Seat.find({ library: libraryId })
+      .sort({ seatNumber: 1 })
+      .populate('assignedTo', 'fullName memberId');
+
+    return attachSeatBookings(seats);
   },
 
-  /**
-   * Shift availability rules:
-   * - FULL_DAY booking blocks the seat for all other bookings
-   * - MORNING booking still allows EVENING on the same seat
-   * - EVENING booking still allows MORNING on the same seat
-   * - A seat can hold max 2 members (one MORNING + one EVENING)
-   */
   async getAvailableSeats(libraryId: string, shiftType?: ShiftType): Promise<ISeatDocument[]> {
     const seats = await Seat.find({ library: libraryId }).sort({ seatNumber: 1 });
 
@@ -71,17 +115,17 @@ export const seatService = {
         continue;
       }
 
+      const bookedShifts = await getActiveBookedShifts(seat._id.toString());
+
       let isAvailable = false;
 
       if (!shiftType) {
-        const [morning, evening, fullDay] = await Promise.all([
-          this.isSeatAvailableForShift(seat._id.toString(), ShiftType.MORNING),
-          this.isSeatAvailableForShift(seat._id.toString(), ShiftType.EVENING),
-          this.isSeatAvailableForShift(seat._id.toString(), ShiftType.FULL_DAY),
-        ]);
-        isAvailable = morning || evening || fullDay;
+        isAvailable =
+          isSeatAvailableForShift(bookedShifts, ShiftType.MORNING) ||
+          isSeatAvailableForShift(bookedShifts, ShiftType.EVENING) ||
+          isSeatAvailableForShift(bookedShifts, ShiftType.FULL_DAY);
       } else {
-        isAvailable = await this.isSeatAvailableForShift(seat._id.toString(), shiftType);
+        isAvailable = isSeatAvailableForShift(bookedShifts, shiftType);
       }
 
       if (isAvailable) {
@@ -93,38 +137,17 @@ export const seatService = {
   },
 
   async isSeatAvailableForShift(seatId: string, requestedShift: ShiftType): Promise<boolean> {
-    const activeMembers = await Member.find({
-      seat: seatId,
-      status: MemberStatus.ACTIVE,
-    });
-
-    const bookedShifts = activeMembers.map((m) => m.shiftType);
-
-    // FULL_DAY seat → not available for any other booking
-    if (bookedShifts.includes(ShiftType.FULL_DAY)) {
-      return false;
-    }
-
-    if (requestedShift === ShiftType.FULL_DAY) {
-      return bookedShifts.length === 0;
-    }
-
-    // MORNING seat → still available for EVENING (and vice versa)
-    if (requestedShift === ShiftType.MORNING) {
-      return !bookedShifts.includes(ShiftType.MORNING);
-    }
-
-    if (requestedShift === ShiftType.EVENING) {
-      return !bookedShifts.includes(ShiftType.EVENING);
-    }
-
-    return bookedShifts.length < 2;
+    const bookedShifts = await getActiveBookedShifts(seatId);
+    return isSeatAvailableForShift(bookedShifts, requestedShift);
   },
 
   async lockSeat(seatId: string, _memberId: string): Promise<ISeatDocument> {
     const seat = await this.getSeatById(seatId);
 
-    const isAvailable = await this.isSeatAvailableForShift(seatId, ShiftType.FULL_DAY);
+    const bookedShifts = await getActiveBookedShifts(seatId);
+    const isAvailable =
+      isSeatAvailableForShift(bookedShifts, ShiftType.FULL_DAY) && bookedShifts.length === 0;
+
     if (!isAvailable || seat.status === SeatStatus.LOCKED) {
       throw new ApiError(400, MESSAGES.SEAT_NOT_AVAILABLE);
     }
@@ -150,61 +173,114 @@ export const seatService = {
     seat.lockedAt = null;
     await seat.save();
 
+    const bookedShifts = await getActiveBookedShifts(seatId);
+    if (bookedShifts.length > 1) {
+      const morningMember = await Member.findOne({
+        seat: seatId,
+        status: MemberStatus.ACTIVE,
+        shiftType: ShiftType.MORNING,
+      });
+      if (morningMember && shiftType === ShiftType.EVENING) {
+        seat.assignedTo = morningMember._id;
+        seat.shiftType = ShiftType.MORNING;
+        await seat.save();
+      }
+    }
+
     return seat;
   },
 
   async releaseSeat(seatId: string): Promise<ISeatDocument> {
     const seat = await this.getSeatById(seatId);
 
-    const remainingMembers = await Member.countDocuments({
+    const remainingMembers = await Member.find({
       seat: seatId,
       status: MemberStatus.ACTIVE,
-    });
+    }).sort({ createdAt: 1 });
 
-    if (remainingMembers === 0) {
+    if (remainingMembers.length === 0) {
       seat.status = SeatStatus.AVAILABLE;
       seat.assignedTo = null;
       seat.shiftType = null;
       seat.lockedAt = null;
     } else {
-      const activeMember = await Member.findOne({
-        seat: seatId,
-        status: MemberStatus.ACTIVE,
-      }).sort({ createdAt: -1 });
-
-      if (activeMember) {
-        seat.assignedTo = activeMember._id;
-        seat.shiftType = activeMember.shiftType;
-        seat.status = SeatStatus.BOOKED;
-      }
+      const primary = remainingMembers[0];
+      seat.assignedTo = primary._id;
+      seat.shiftType = primary.shiftType;
+      seat.status = SeatStatus.BOOKED;
+      seat.lockedAt = null;
     }
 
     await seat.save();
     return seat;
   },
 
-  async getSeatsByShift(libraryId: string) {
+  async getShiftSeatStats(libraryId: string): Promise<ShiftSeatStats> {
     const seats = await Seat.find({ library: libraryId });
+    const totalSeats = seats.length;
 
-    let morning = 0;
-    let evening = 0;
-    let fullDay = 0;
+    const activeMembersWithSeat = await Member.find({
+      library: libraryId,
+      status: MemberStatus.ACTIVE,
+      seat: { $ne: null },
+    }).select('shiftType');
+
+    const occupancy = countMemberShiftOccupancy(activeMembersWithSeat);
+
+    let morningAvailable = 0;
+    let eveningAvailable = 0;
+    let fullDayAvailable = 0;
 
     for (const seat of seats) {
       if (seat.status === SeatStatus.LOCKED) {
         continue;
       }
 
-      const morningAvailable = await this.isSeatAvailableForShift(seat._id.toString(), ShiftType.MORNING);
-      const eveningAvailable = await this.isSeatAvailableForShift(seat._id.toString(), ShiftType.EVENING);
-      const fullDayAvailable = await this.isSeatAvailableForShift(seat._id.toString(), ShiftType.FULL_DAY);
+      const bookedShifts = await getActiveBookedShifts(seat._id.toString());
 
-      if (morningAvailable) morning++;
-      if (eveningAvailable) evening++;
-      if (fullDayAvailable) fullDay++;
+      if (isSeatAvailableForShift(bookedShifts, ShiftType.MORNING)) {
+        morningAvailable++;
+      }
+      if (isSeatAvailableForShift(bookedShifts, ShiftType.EVENING)) {
+        eveningAvailable++;
+      }
+      if (isSeatAvailableForShift(bookedShifts, ShiftType.FULL_DAY)) {
+        fullDayAvailable++;
+      }
     }
 
-    return { morning, evening, fullDay };
+    return {
+      totalSeats,
+      morning: {
+        available: morningAvailable,
+        occupied: occupancy.morningSlots,
+      },
+      evening: {
+        available: eveningAvailable,
+        occupied: occupancy.eveningSlots,
+      },
+      fullDay: {
+        available: fullDayAvailable,
+        occupied: occupancy.fullDay,
+      },
+    };
+  },
+
+  /** @deprecated Use getShiftSeatStats — kept for backward compatibility */
+  async getSeatsByShift(libraryId: string) {
+    const stats = await this.getShiftSeatStats(libraryId);
+    return {
+      totalSeats: stats.totalSeats,
+      morning: stats.morning,
+      evening: stats.evening,
+      fullDay: stats.fullDay,
+      morningAvailable: stats.morning.available,
+      eveningAvailable: stats.evening.available,
+      fullDayAvailable: stats.fullDay.available,
+      morningOccupied: stats.morning.occupied,
+      eveningOccupied: stats.evening.occupied,
+      fullDayOccupied: stats.fullDay.occupied,
+    };
   },
 
   async getSeatById(seatId: string): Promise<ISeatDocument> {

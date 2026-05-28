@@ -47,7 +47,7 @@ export const dashboardService = {
           },
         ]),
 
-        seatService.getSeatsByShift(libraryId),
+        seatService.getShiftSeatStats(libraryId),
       ]);
 
     const currentMonthRevenue = revenueResult[0]?.currentMonthRevenue ?? 0;
@@ -62,6 +62,12 @@ export const dashboardService = {
         morning: shiftAvailability.morning,
         evening: shiftAvailability.evening,
         fullDay: shiftAvailability.fullDay,
+        morningOccupied: shiftAvailability.morning.occupied,
+        eveningOccupied: shiftAvailability.evening.occupied,
+        fullDayOccupied: shiftAvailability.fullDay.occupied,
+        morningAvailable: shiftAvailability.morning.available,
+        eveningAvailable: shiftAvailability.evening.available,
+        fullDayAvailable: shiftAvailability.fullDay.available,
       },
     };
   },
