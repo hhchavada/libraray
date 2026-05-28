@@ -3,11 +3,19 @@ import {
   ShiftType,
   PaymentStatus,
   PaymentMode,
-  MembershipPlan,
   MemberStatus,
+  normalizeMembershipPlan,
 } from '../constants/enums';
 
 const MEMBER_TYPES = ['permanent', 'demo', 'without-seat'] as const;
+
+const membershipPlanSchema = Joi.string().custom((value, helpers) => {
+  const plan = normalizeMembershipPlan(value);
+  if (!plan) {
+    return helpers.error('any.invalid');
+  }
+  return plan;
+}, 'membership plan');
 
 const baseMemberFields = {
   fullName: Joi.string().required(),
@@ -33,9 +41,7 @@ export const memberValidation = {
     membershipPlan: Joi.when('type', {
       is: 'demo',
       then: Joi.forbidden(),
-      otherwise: Joi.string()
-        .valid(...Object.values(MembershipPlan))
-        .required(),
+      otherwise: membershipPlanSchema.required(),
     }),
     feePerMonth: Joi.when('type', {
       is: 'demo',
@@ -45,7 +51,7 @@ export const memberValidation = {
     discount: Joi.when('type', {
       is: 'demo',
       then: Joi.forbidden(),
-      otherwise: Joi.number().min(0).max(100).optional(),
+      otherwise: Joi.number().min(0).max(Joi.ref('feePerMonth')).optional(),
     }),
     paymentStatus: Joi.when('type', {
       is: 'demo',
@@ -86,11 +92,9 @@ export const memberValidation = {
     courseName: Joi.string().optional(),
     email: Joi.string().email().optional(),
     remarks: Joi.string().optional(),
-    membershipPlan: Joi.string()
-      .valid(...Object.values(MembershipPlan))
-      .optional(),
+    membershipPlan: membershipPlanSchema.optional(),
     feePerMonth: Joi.number().positive().optional(),
-    discount: Joi.number().min(0).max(100).optional(),
+    discount: Joi.number().min(0).optional(),
     paymentStatus: Joi.string()
       .valid(...Object.values(PaymentStatus))
       .optional(),

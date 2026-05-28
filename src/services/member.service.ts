@@ -7,16 +7,11 @@ import {
   MemberStatus,
   PaymentStatus,
   MembershipPlan,
+  MEMBERSHIP_PLAN_MONTHS,
+  normalizeMembershipPlan,
   ShiftType,
 } from '../constants/enums';
 import { seatService } from './seat.service';
-
-const PLAN_MULTIPLIER: Record<MembershipPlan, number> = {
-  [MembershipPlan.MONTHLY]: 1,
-  [MembershipPlan.QUARTERLY]: 3,
-  [MembershipPlan.HALF_YEARLY]: 6,
-  [MembershipPlan.YEARLY]: 12,
-};
 
 export interface MemberFilters {
   status?: MemberStatus;
@@ -85,15 +80,28 @@ export interface CreateMemberData {
   seatId?: string;
 }
 
+const resolvePlanMonths = (plan: MembershipPlan | string): number => {
+  const normalized =
+    normalizeMembershipPlan(String(plan)) ?? (plan as MembershipPlan);
+  const months = MEMBERSHIP_PLAN_MONTHS[normalized];
+  if (!months) {
+    throw new ApiError(400, MESSAGES.INVALID_MEMBERSHIP_PLAN);
+  }
+  return months;
+};
+
 const calculateFees = (data: {
   feePerMonth: number;
   discount?: number;
-  membershipPlan: MembershipPlan;
+  membershipPlan: MembershipPlan | string;
   amountPaid: number;
 }) => {
   const discount = data.discount ?? 0;
-  const feesAfterDiscount = data.feePerMonth - (data.feePerMonth * discount) / 100;
-  const multiplier = PLAN_MULTIPLIER[data.membershipPlan];
+  if (discount > data.feePerMonth) {
+    throw new ApiError(400, MESSAGES.DISCOUNT_EXCEEDS_FEE);
+  }
+  const feesAfterDiscount = data.feePerMonth - discount;
+  const multiplier = resolvePlanMonths(data.membershipPlan);
   const totalFee = feesAfterDiscount * multiplier;
   const dueAmount = Math.max(0, totalFee - data.amountPaid);
 
@@ -125,6 +133,19 @@ const buildSortQuery = (sort?: MemberSortOption): Record<string, 1 | -1> => {
 
 export const memberService = {
   async createMember(data: CreateMemberData, libraryId: string): Promise<IMemberDocument> {
+    let membershipPlan: MembershipPlan | undefined;
+
+    if (data.type !== 'demo') {
+      if (!data.membershipPlan) {
+        throw new ApiError(400, MESSAGES.INVALID_MEMBERSHIP_PLAN);
+      }
+      const normalized = normalizeMembershipPlan(String(data.membershipPlan));
+      if (!normalized) {
+        throw new ApiError(400, MESSAGES.INVALID_MEMBERSHIP_PLAN);
+      }
+      membershipPlan = normalized;
+    }
+
     switch (data.type) {
       case 'permanent':
         return this.createPermanentMember(
@@ -134,7 +155,7 @@ export const memberService = {
             email: data.email,
             courseName: data.courseName,
             memberType: MemberType.PERMANENT,
-            membershipPlan: data.membershipPlan!,
+            membershipPlan: membershipPlan!,
             shiftType: data.shiftType,
             startDate: data.startDate,
             endDate: data.endDate,
@@ -171,7 +192,7 @@ export const memberService = {
             email: data.email,
             courseName: data.courseName,
             memberType: MemberType.WITHOUT_SEAT,
-            membershipPlan: data.membershipPlan!,
+            membershipPlan: membershipPlan!,
             shiftType: data.shiftType,
             startDate: data.startDate,
             endDate: data.endDate,
@@ -384,7 +405,13 @@ export const memberService = {
     if (data.endDate) member.endDate = data.endDate;
     if (data.feePerMonth !== undefined) member.feePerMonth = data.feePerMonth;
     if (data.discount !== undefined) member.discount = data.discount;
-    if (data.membershipPlan) member.membershipPlan = data.membershipPlan;
+    if (data.membershipPlan) {
+      const normalized = normalizeMembershipPlan(String(data.membershipPlan));
+      if (!normalized) {
+        throw new ApiError(400, MESSAGES.INVALID_MEMBERSHIP_PLAN);
+      }
+      member.membershipPlan = normalized;
+    }
     if (data.amountPaid !== undefined) member.amountPaid = data.amountPaid;
     if (data.paymentMode) member.paymentMode = data.paymentMode as IMemberDocument['paymentMode'];
     if (data.remarks !== undefined) member.remarks = data.remarks;

@@ -59,6 +59,9 @@ export const MESSAGES = {
   MEMBER_ID_GENERATED: 'Member ID generated successfully',
   MEMBERS_FETCHED: 'Members fetched successfully',
   MEMBER_FETCHED: 'Member fetched successfully',
+  DISCOUNT_EXCEEDS_FEE: 'Discount cannot be greater than fee per month',
+  INVALID_MEMBERSHIP_PLAN:
+    'Invalid membership plan. Use: 1_month, 2_months, 3_months, 6_months, or 1_year',
   EXPIRED_MEMBERS_UPDATED: 'Expired members updated successfully',
 
   // Seat

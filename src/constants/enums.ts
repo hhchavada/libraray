@@ -47,11 +47,55 @@ export enum PaymentMode {
 }
 
 export enum MembershipPlan {
-  MONTHLY = 'monthly',
-  QUARTERLY = 'quarterly',
-  HALF_YEARLY = 'half_yearly',
-  YEARLY = 'yearly',
+  ONE_MONTH = '1_month',
+  TWO_MONTHS = '2_months',
+  THREE_MONTHS = '3_months',
+  SIX_MONTHS = '6_months',
+  ONE_YEAR = '1_year',
 }
+
+/** Months multiplier for totalFee = feesAfterDiscount × months */
+export const MEMBERSHIP_PLAN_MONTHS: Record<MembershipPlan, number> = {
+  [MembershipPlan.ONE_MONTH]: 1,
+  [MembershipPlan.TWO_MONTHS]: 2,
+  [MembershipPlan.THREE_MONTHS]: 3,
+  [MembershipPlan.SIX_MONTHS]: 6,
+  [MembershipPlan.ONE_YEAR]: 12,
+};
+
+const MEMBERSHIP_PLAN_ALIASES: Record<string, MembershipPlan> = {
+  '1_month': MembershipPlan.ONE_MONTH,
+  '1_months': MembershipPlan.ONE_MONTH,
+  '1month': MembershipPlan.ONE_MONTH,
+  '2_months': MembershipPlan.TWO_MONTHS,
+  '2_month': MembershipPlan.TWO_MONTHS,
+  '2months': MembershipPlan.TWO_MONTHS,
+  '3_months': MembershipPlan.THREE_MONTHS,
+  '3_month': MembershipPlan.THREE_MONTHS,
+  '3months': MembershipPlan.THREE_MONTHS,
+  '6_months': MembershipPlan.SIX_MONTHS,
+  '6_month': MembershipPlan.SIX_MONTHS,
+  '6months': MembershipPlan.SIX_MONTHS,
+  '1_year': MembershipPlan.ONE_YEAR,
+  '1_years': MembershipPlan.ONE_YEAR,
+  '1year': MembershipPlan.ONE_YEAR,
+  // legacy values
+  monthly: MembershipPlan.ONE_MONTH,
+  quarterly: MembershipPlan.THREE_MONTHS,
+  half_yearly: MembershipPlan.SIX_MONTHS,
+  yearly: MembershipPlan.ONE_YEAR,
+};
+
+export const normalizeMembershipPlan = (value: string): MembershipPlan | null => {
+  const key = value.trim().toLowerCase().replace(/\s+/g, '_');
+  if (MEMBERSHIP_PLAN_ALIASES[key]) {
+    return MEMBERSHIP_PLAN_ALIASES[key];
+  }
+  if (Object.values(MembershipPlan).includes(key as MembershipPlan)) {
+    return key as MembershipPlan;
+  }
+  return null;
+};
 
 export enum ExpenseCategory {
   RENT = 'rent',
