@@ -80,6 +80,10 @@ export const MESSAGES = {
   // Dashboard
   DASHBOARD_STATS_FETCHED: 'Dashboard stats fetched successfully',
 
+  // Admin
+  ADMIN_DASHBOARD_FETCHED: 'Admin dashboard data fetched successfully',
+  ADMIN_LIBRARY_FETCHED: 'Library details fetched successfully',
+
   // Revenue
   REVENUE_FETCHED: 'Revenue data fetched successfully',
 

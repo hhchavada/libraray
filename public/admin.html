@@ -1,0 +1,532 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Library LMS — Admin Panel</title>
+  <style>
+    :root {
+      --bg: #0f172a;
+      --card: #1e293b;
+      --border: #334155;
+      --text: #f1f5f9;
+      --muted: #94a3b8;
+      --primary: #3b82f6;
+      --primary-hover: #2563eb;
+      --success: #22c55e;
+      --warning: #f59e0b;
+      --danger: #ef4444;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: 'Segoe UI', system-ui, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      min-height: 100vh;
+    }
+    .wrap { max-width: 1280px; margin: 0 auto; padding: 24px 16px 48px; }
+    header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      flex-wrap: wrap;
+      gap: 16px;
+      margin-bottom: 28px;
+      padding-bottom: 20px;
+      border-bottom: 1px solid var(--border);
+    }
+    header h1 { font-size: 1.5rem; font-weight: 700; }
+    header p { color: var(--muted); font-size: 0.875rem; margin-top: 4px; }
+    .btn {
+      padding: 10px 18px;
+      border-radius: 8px;
+      border: none;
+      font-size: 0.875rem;
+      font-weight: 600;
+      cursor: pointer;
+      background: var(--primary);
+      color: #fff;
+    }
+    .btn:hover { background: var(--primary-hover); }
+    .btn-outline {
+      background: transparent;
+      border: 1px solid var(--border);
+      color: var(--text);
+    }
+    .btn-outline:hover { background: var(--card); }
+    .login-card {
+      max-width: 400px;
+      margin: 80px auto;
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      padding: 32px;
+    }
+    .login-card h2 { margin-bottom: 8px; }
+    .login-card > p { color: var(--muted); font-size: 0.875rem; margin-bottom: 24px; }
+    label { display: block; font-size: 0.8rem; color: var(--muted); margin-bottom: 6px; }
+    input {
+      width: 100%;
+      padding: 12px 14px;
+      margin-bottom: 16px;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      background: var(--bg);
+      color: var(--text);
+      font-size: 1rem;
+    }
+    input:focus { outline: none; border-color: var(--primary); }
+    .hidden { display: none !important; }
+    .stats {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+      gap: 16px;
+      margin-bottom: 28px;
+    }
+    .stat {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 20px;
+    }
+    .stat .label { font-size: 0.75rem; color: var(--muted); text-transform: uppercase; letter-spacing: 0.05em; }
+    .stat .value { font-size: 1.75rem; font-weight: 700; margin-top: 8px; }
+    .stat.revenue .value { color: var(--success); }
+    .stat.due .value { color: var(--warning); }
+    .section-title {
+      font-size: 1.125rem;
+      font-weight: 600;
+      margin-bottom: 16px;
+    }
+    .table-wrap {
+      overflow-x: auto;
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+    }
+    table { width: 100%; border-collapse: collapse; font-size: 0.875rem; }
+    th, td { padding: 14px 16px; text-align: left; border-bottom: 1px solid var(--border); }
+    th { color: var(--muted); font-weight: 600; font-size: 0.75rem; text-transform: uppercase; }
+    tr:last-child td { border-bottom: none; }
+    tr:hover td { background: rgba(59, 130, 246, 0.06); }
+    .badge {
+      display: inline-block;
+      padding: 4px 10px;
+      border-radius: 20px;
+      font-size: 0.7rem;
+      font-weight: 600;
+    }
+    .badge-active { background: rgba(34, 197, 94, 0.2); color: var(--success); }
+    .badge-inactive { background: rgba(239, 68, 68, 0.2); color: var(--danger); }
+    .sub { font-size: 0.75rem; color: var(--muted); display: block; margin-top: 2px; }
+    .alert {
+      padding: 12px 16px;
+      border-radius: 8px;
+      margin-bottom: 16px;
+      font-size: 0.875rem;
+    }
+    .alert-error { background: rgba(239, 68, 68, 0.15); color: #fca5a5; border: 1px solid rgba(239, 68, 68, 0.3); }
+    .loading { text-align: center; padding: 48px; color: var(--muted); }
+    .toolbar { display: flex; gap: 12px; align-items: center; margin-bottom: 16px; flex-wrap: wrap; }
+    .search {
+      flex: 1;
+      min-width: 200px;
+      max-width: 320px;
+      padding: 10px 14px;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      background: var(--card);
+      color: var(--text);
+    }
+    tr.row-clickable { cursor: pointer; }
+    tr.row-clickable:hover td { background: rgba(59, 130, 246, 0.12) !important; }
+    .hint { font-size: 0.8rem; color: var(--muted); margin: -8px 0 16px; }
+    .detail-header { margin-bottom: 24px; }
+    .detail-header h2 { font-size: 1.35rem; }
+    .two-col { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-top: 24px; }
+    @media (max-width: 900px) { .two-col { grid-template-columns: 1fr; } }
+    .info-card {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 20px;
+      margin-bottom: 20px;
+    }
+    .info-card h3 { font-size: 0.9rem; color: var(--muted); margin-bottom: 12px; text-transform: uppercase; }
+    .info-row { display: flex; justify-content: space-between; padding: 8px 0; border-bottom: 1px solid var(--border); font-size: 0.875rem; }
+    .info-row:last-child { border-bottom: none; }
+  </style>
+</head>
+<body>
+  <div id="loginView" class="wrap">
+    <div class="login-card">
+      <h2>Admin Login</h2>
+      <p>Super admin access only. Use credentials from create-admin script.</p>
+      <div id="loginError" class="alert alert-error hidden"></div>
+      <label>Email</label>
+      <input type="email" id="loginEmail" placeholder="your@email.com" value="your@email.com" />
+      <label>Password</label>
+      <input type="password" id="loginPassword" placeholder="Password" />
+      <button class="btn" id="loginBtn" style="width:100%">Sign in</button>
+    </div>
+  </div>
+
+  <div id="dashboardView" class="wrap hidden">
+    <header>
+      <div>
+        <h1>Library Management — Admin</h1>
+        <p>All libraries, members, seats & revenue overview</p>
+      </div>
+      <div style="display:flex;gap:10px">
+        <button class="btn" id="refreshBtn">Refresh</button>
+        <button class="btn btn-outline" id="logoutBtn">Logout</button>
+      </div>
+    </header>
+
+    <div id="dashError" class="alert alert-error hidden"></div>
+
+    <div id="listPanel">
+      <div class="stats" id="summaryStats"></div>
+      <div class="toolbar">
+        <input type="search" class="search" id="searchInput" placeholder="Search library or owner..." />
+      </div>
+      <p class="section-title">Libraries</p>
+      <p class="hint">Click any library row to view full details</p>
+      <div class="table-wrap">
+        <div id="tableLoading" class="loading">Loading dashboard...</div>
+        <table id="librariesTable" class="hidden">
+          <thead>
+            <tr>
+              <th>Library</th>
+              <th>Owner</th>
+              <th>Members</th>
+              <th>Seats</th>
+              <th>Shift (M / E)</th>
+              <th>Revenue</th>
+              <th>Due</th>
+              <th>Status</th>
+            </tr>
+          </thead>
+          <tbody id="librariesBody"></tbody>
+        </table>
+      </div>
+    </div>
+
+    <div id="detailPanel" class="hidden">
+      <div class="detail-header">
+        <button class="btn btn-outline" id="backBtn" style="margin-bottom:16px">← Back to all libraries</button>
+        <h2 id="detailTitle">Library</h2>
+        <p class="sub" id="detailSubtitle"></p>
+      </div>
+      <div id="detailLoading" class="loading">Loading library...</div>
+      <div id="detailContent" class="hidden">
+        <div class="stats" id="detailStats"></div>
+        <div class="info-card" id="ownerCard"></div>
+        <div class="two-col">
+          <div>
+            <p class="section-title">Members</p>
+            <div class="table-wrap">
+              <table>
+                <thead>
+                  <tr>
+                    <th>ID</th>
+                    <th>Name</th>
+                    <th>Shift</th>
+                    <th>Seat</th>
+                    <th>Paid</th>
+                    <th>Due</th>
+                  </tr>
+                </thead>
+                <tbody id="membersBody"></tbody>
+              </table>
+            </div>
+          </div>
+          <div>
+            <p class="section-title">Seats</p>
+            <div class="table-wrap">
+              <table>
+                <thead>
+                  <tr>
+                    <th>#</th>
+                    <th>Cell</th>
+                    <th>Status</th>
+                    <th>Bookings</th>
+                  </tr>
+                </thead>
+                <tbody id="seatsBody"></tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const API = '/api/v1';
+    const TOKEN_KEY = 'admin_access_token';
+
+    const $ = (id) => document.getElementById(id);
+
+    const formatMoney = (n) =>
+      '₹' + Number(n || 0).toLocaleString('en-IN', { maximumFractionDigits: 0 });
+
+    const getToken = () => localStorage.getItem(TOKEN_KEY);
+
+    const showError = (el, msg) => {
+      el.textContent = msg;
+      el.classList.remove('hidden');
+    };
+
+    const hideError = (el) => el.classList.add('hidden');
+
+    async function api(path, options = {}) {
+      const headers = { 'Content-Type': 'application/json', ...(options.headers || {}) };
+      const token = getToken();
+      if (token) headers.Authorization = 'Bearer ' + token;
+      const res = await fetch(API + path, { ...options, headers });
+      const json = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(json.message || res.statusText || 'Request failed');
+      return json;
+    }
+
+    async function login() {
+      hideError($('loginError'));
+      $('loginBtn').disabled = true;
+      try {
+        const res = await api('/auth/login', {
+          method: 'POST',
+          body: JSON.stringify({
+            email: $('loginEmail').value.trim(),
+            password: $('loginPassword').value,
+          }),
+        });
+        localStorage.setItem(TOKEN_KEY, res.data.accessToken);
+        showDashboard();
+      } catch (e) {
+        showError($('loginError'), e.message);
+      } finally {
+        $('loginBtn').disabled = false;
+      }
+    }
+
+    function logout() {
+      localStorage.removeItem(TOKEN_KEY);
+      $('dashboardView').classList.add('hidden');
+      $('loginView').classList.remove('hidden');
+    }
+
+    function renderSummary(s, targetId) {
+      const librariesCard =
+        s.totalLibraries !== undefined
+          ? `<div class="stat"><span class="label">Libraries</span><div class="value">${s.totalLibraries}</div><span class="sub">${s.activeLibraries} active</span></div>`
+          : '';
+      $(targetId).innerHTML = `
+        ${librariesCard}
+        <div class="stat"><span class="label">Members</span><div class="value">${s.totalMembers ?? s.total ?? 0}</div><span class="sub">${s.activeMembers ?? s.active ?? 0} active</span></div>
+        <div class="stat"><span class="label">Total seats</span><div class="value">${s.totalSeats ?? s.total ?? 0}</div></div>
+        <div class="stat"><span class="label">Available</span><div class="value" style="color:var(--success)">${s.availableSeats ?? s.available ?? 0}</div></div>
+        <div class="stat"><span class="label">Booked</span><div class="value">${s.bookedSeats ?? s.booked ?? 0}</div></div>
+        <div class="stat"><span class="label">Locked</span><div class="value">${s.lockedSeats ?? s.locked ?? 0}</div></div>
+        <div class="stat"><span class="label">Morning occ.</span><div class="value">${s.morningOccupied ?? 0}</div><span class="sub">avail: ${s.morningAvailable ?? 0}</span></div>
+        <div class="stat"><span class="label">Evening occ.</span><div class="value">${s.eveningOccupied ?? 0}</div><span class="sub">avail: ${s.eveningAvailable ?? 0}</span></div>
+        <div class="stat revenue"><span class="label">Revenue</span><div class="value">${formatMoney(s.totalRevenue ?? s.totalCollected ?? 0)}</div></div>
+        <div class="stat due"><span class="label">Due</span><div class="value">${formatMoney(s.totalDue ?? 0)}</div></div>
+      `;
+    }
+
+    let allLibraries = [];
+
+    function renderTable(rows) {
+      const q = $('searchInput').value.trim().toLowerCase();
+      const filtered = q
+        ? rows.filter(
+            (r) =>
+              r.libraryName.toLowerCase().includes(q) ||
+              (r.owner?.email || '').toLowerCase().includes(q) ||
+              (r.owner?.fullName || '').toLowerCase().includes(q)
+          )
+        : rows;
+
+      $('librariesBody').innerHTML = filtered
+        .map(
+          (lib) => `
+        <tr class="row-clickable" data-library-id="${lib.libraryId}">
+          <td>
+            <strong>${lib.libraryName}</strong>
+            <span class="sub">${lib.address}</span>
+          </td>
+          <td>
+            ${lib.owner ? lib.owner.fullName : '—'}
+            <span class="sub">${lib.owner?.email || ''}</span>
+          </td>
+          <td>
+            <strong>${lib.members.total}</strong>
+            <span class="sub">active: ${lib.members.active} · P:${lib.members.permanent} D:${lib.members.demo}</span>
+          </td>
+          <td>
+            <strong>${lib.seats.total}</strong>
+            <span class="sub">free: ${lib.seats.available} · booked: ${lib.seats.booked}</span>
+          </td>
+          <td>
+            <span class="sub">occ M:${lib.seats.morningOccupied} E:${lib.seats.eveningOccupied}</span>
+            <span class="sub">avail M:${lib.seats.morningAvailable} E:${lib.seats.eveningAvailable}</span>
+          </td>
+          <td><strong style="color:var(--success)">${formatMoney(lib.revenue.totalCollected)}</strong></td>
+          <td><strong style="color:var(--warning)">${formatMoney(lib.revenue.totalDue)}</strong></td>
+          <td><span class="badge ${lib.isActive ? 'badge-active' : 'badge-inactive'}">${lib.isActive ? 'Active' : 'Inactive'}</span></td>
+        </tr>
+      `
+        )
+        .join('');
+
+      $('librariesBody').querySelectorAll('.row-clickable').forEach((row) => {
+        row.addEventListener('click', () => openLibraryDetail(row.dataset.libraryId));
+      });
+    }
+
+    function showListView() {
+      $('listPanel').classList.remove('hidden');
+      $('detailPanel').classList.add('hidden');
+    }
+
+    function showDetailView() {
+      $('listPanel').classList.add('hidden');
+      $('detailPanel').classList.remove('hidden');
+    }
+
+    function renderLibraryDetail(lib) {
+      $('detailTitle').textContent = lib.libraryName;
+      $('detailTitle').dataset.libraryId = lib.libraryId;
+      $('detailSubtitle').textContent = lib.address + (lib.isActive ? '' : ' · Inactive');
+
+      renderSummary(
+        {
+          total: lib.members.total,
+          active: lib.members.active,
+          totalSeats: lib.seats.total,
+          available: lib.seats.available,
+          booked: lib.seats.booked,
+          locked: lib.seats.locked,
+          morningOccupied: lib.seats.morningOccupied,
+          eveningOccupied: lib.seats.eveningOccupied,
+          morningAvailable: lib.seats.morningAvailable,
+          eveningAvailable: lib.seats.eveningAvailable,
+          totalCollected: lib.revenue.totalCollected,
+          totalDue: lib.revenue.totalDue,
+        },
+        'detailStats'
+      );
+
+      const owner = lib.owner;
+      $('ownerCard').innerHTML = owner
+        ? `<h3>Owner</h3>
+           <div class="info-row"><span>Name</span><strong>${owner.fullName}</strong></div>
+           <div class="info-row"><span>Email</span><span>${owner.email}</span></div>
+           <div class="info-row"><span>Mobile</span><span>${owner.mobileNumber}</span></div>
+           <div class="info-row"><span>Seat map</span><span>${lib.seatMap.hasCustomSeatMap ? 'Custom' : 'Default'} (${lib.seatMap.rows}×${lib.seatMap.columns})</span></div>`
+        : '<h3>Owner</h3><p class="sub">No owner linked</p>';
+
+      $('membersBody').innerHTML =
+        lib.membersList.length === 0
+          ? '<tr><td colspan="6" style="text-align:center;color:var(--muted)">No members</td></tr>'
+          : lib.membersList
+              .map(
+                (m) => `
+        <tr>
+          <td>${m.memberId}</td>
+          <td><strong>${m.fullName}</strong><span class="sub">${m.mobileNumber} · ${m.memberType}</span></td>
+          <td>${m.shiftType}</td>
+          <td>${m.seatNumber ?? '—'}</td>
+          <td style="color:var(--success)">${formatMoney(m.amountPaid)}</td>
+          <td style="color:var(--warning)">${formatMoney(m.dueAmount)}</td>
+        </tr>`
+              )
+              .join('');
+
+      const bookedOnly = lib.seatsList.filter((s) => s.status !== 'available' || s.bookings.length > 0);
+      const seatsToShow = bookedOnly.length ? bookedOnly : lib.seatsList.slice(0, 30);
+
+      $('seatsBody').innerHTML =
+        seatsToShow.length === 0
+          ? '<tr><td colspan="4" style="text-align:center;color:var(--muted)">No seats</td></tr>'
+          : seatsToShow
+              .map((s) => {
+                const bookingText =
+                  s.bookings.length > 0
+                    ? s.bookings.map((b) => `${b.fullName} (${b.shiftType})`).join(', ')
+                    : '—';
+                return `
+        <tr>
+          <td><strong>${s.seatNumber}</strong></td>
+          <td>${s.cellLabel || '—'}</td>
+          <td><span class="badge ${s.status === 'available' ? 'badge-active' : 'badge-inactive'}">${s.status}</span></td>
+          <td><span class="sub">${bookingText}</span></td>
+        </tr>`;
+              })
+              .join('');
+    }
+
+    async function openLibraryDetail(libraryId) {
+      showDetailView();
+      hideError($('dashError'));
+      $('detailLoading').classList.remove('hidden');
+      $('detailContent').classList.add('hidden');
+      try {
+        const res = await api('/admin/libraries/' + libraryId);
+        renderLibraryDetail(res.data);
+        $('detailLoading').classList.add('hidden');
+        $('detailContent').classList.remove('hidden');
+      } catch (e) {
+        showError($('dashError'), e.message);
+        showListView();
+      }
+    }
+
+    async function loadDashboard() {
+      hideError($('dashError'));
+      $('tableLoading').classList.remove('hidden');
+      $('librariesTable').classList.add('hidden');
+      try {
+        const res = await api('/admin/dashboard');
+        const data = res.data;
+        renderSummary(data.summary, 'summaryStats');
+        allLibraries = data.libraries || [];
+        renderTable(allLibraries);
+        $('tableLoading').classList.add('hidden');
+        $('librariesTable').classList.remove('hidden');
+      } catch (e) {
+        showError($('dashError'), e.message);
+        if (e.message.includes('Forbidden') || e.message.includes('Unauthorized')) {
+          logout();
+        }
+      }
+    }
+
+    function showDashboard() {
+      $('loginView').classList.add('hidden');
+      $('dashboardView').classList.remove('hidden');
+      loadDashboard();
+    }
+
+    $('loginBtn').addEventListener('click', login);
+    $('loginPassword').addEventListener('keydown', (e) => e.key === 'Enter' && login());
+    $('logoutBtn').addEventListener('click', logout);
+    $('refreshBtn').addEventListener('click', () => {
+      if ($('detailPanel').classList.contains('hidden')) loadDashboard();
+      else {
+        const id = $('detailTitle').dataset.libraryId;
+        if (id) openLibraryDetail(id);
+        else loadDashboard();
+      }
+    });
+    $('backBtn').addEventListener('click', () => {
+      showListView();
+      loadDashboard();
+    });
+    $('searchInput').addEventListener('input', () => renderTable(allLibraries));
+
+    if (getToken()) showDashboard();
+  </script>
+</body>
+</html>

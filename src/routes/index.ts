@@ -9,6 +9,7 @@ import expenseRouter from './expense.routes';
 import reportRouter from './report.routes';
 import subscriptionRouter from './subscription.routes';
 import publicRouter from './public.routes';
+import adminRouter from './admin.routes';
 
 const router = Router();
 
@@ -22,5 +23,6 @@ router.use('/expenses', expenseRouter);
 router.use('/reports', reportRouter);
 router.use('/subscriptions', subscriptionRouter);
 router.use('/public', publicRouter);
+router.use('/admin', adminRouter);
 
 export default router;

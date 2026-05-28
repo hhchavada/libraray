@@ -268,7 +268,15 @@ const collection = {
       ],
     },
     {
-      name: '04 - Members',
+      name: '04 - Admin',
+      item: [
+        req('Admin Dashboard', 'GET', `${api}/admin/dashboard`, {
+          event: [loginScript],
+        }),
+      ],
+    },
+    {
+      name: '05 - Members',
       item: [
         req('Create Member (Permanent)', 'POST', `${api}/members`, {
           body: {

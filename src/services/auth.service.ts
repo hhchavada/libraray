@@ -182,7 +182,7 @@ export const authService = {
       throw new ApiError(403, MESSAGES.USER_INACTIVE);
     }
 
-    if (!user.isEmailVerified) {
+    if (!user.isEmailVerified && user.role !== UserRole.SUPER_ADMIN) {
       throw new ApiError(403, MESSAGES.EMAIL_NOT_VERIFIED);
     }
 
