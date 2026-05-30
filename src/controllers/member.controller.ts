@@ -52,6 +52,30 @@ export const memberController = {
     res.status(200).json(new ApiResponse(200, MESSAGES.MEMBER_UPDATED, member));
   }),
 
+  assignSeat: asyncHandler(async (req: Request, res: Response) => {
+    const libraryId = await getOwnerLibraryId(getAuthUserId(req));
+    const { seatId, shiftType } = req.body;
+    const member = await memberService.assignSeatToMember(
+      req.params.id,
+      libraryId,
+      seatId,
+      shiftType
+    );
+    res.status(200).json(new ApiResponse(200, MESSAGES.SEAT_ASSIGNED, member));
+  }),
+
+  changeSeat: asyncHandler(async (req: Request, res: Response) => {
+    const libraryId = await getOwnerLibraryId(getAuthUserId(req));
+    const { seatId, shiftType } = req.body;
+    const member = await memberService.changeMemberSeat(
+      req.params.id,
+      libraryId,
+      seatId,
+      shiftType
+    );
+    res.status(200).json(new ApiResponse(200, MESSAGES.SEAT_CHANGED, member));
+  }),
+
   deleteMember: asyncHandler(async (req: Request, res: Response) => {
     await memberService.deleteMember(req.params.id);
     res.status(200).json(new ApiResponse(200, MESSAGES.MEMBER_DELETED, null));

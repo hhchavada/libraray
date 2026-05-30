@@ -588,7 +588,37 @@
       ]
     },
     {
-      "name": "04 - Members",
+      "name": "04 - Admin",
+      "item": [
+        {
+          "name": "Admin Dashboard",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/api/v1/admin/dashboard",
+            "description": ""
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "if (pm.response.code === 200) {",
+                  "  const res = pm.response.json();",
+                  "  if (res.data && res.data.accessToken) {",
+                  "    pm.collectionVariables.set('accessToken', res.data.accessToken);",
+                  "  }",
+                  "}"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "05 - Members",
       "item": [
         {
           "name": "Create Member (Permanent)",
@@ -709,6 +739,42 @@
             "body": {
               "mode": "raw",
               "raw": "{\n  \"fullName\": \"Rahul Updated\"\n}"
+            }
+          }
+        },
+        {
+          "name": "Assign Seat (without_seat member)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/api/v1/members/{{memberId}}/assign-seat",
+            "description": "",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"seatId\": \"{{seatId}}\",\n  \"shiftType\": \"morning\"\n}"
+            }
+          }
+        },
+        {
+          "name": "Change Seat",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/api/v1/members/{{memberId}}/change-seat",
+            "description": "",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"seatId\": \"{{seatId}}\",\n  \"shiftType\": \"evening\"\n}"
             }
           }
         },

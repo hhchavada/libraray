@@ -7,6 +7,7 @@ import {
   PaymentMode,
   MembershipPlan,
 } from '../constants/enums';
+import { formatMemberLabels } from '../utils/formatLabel.util';
 
 export interface IMember {
   library: Types.ObjectId;
@@ -141,6 +142,11 @@ const memberSchema = new Schema<IMemberDocument>(
   },
   {
     timestamps: true,
+    toJSON: {
+      transform(_doc, ret) {
+        return formatMemberLabels(ret as Record<string, unknown>);
+      },
+    },
   }
 );
 

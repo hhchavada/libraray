@@ -14,6 +14,7 @@ import {
   isSeatAvailableForShift,
   ShiftSeatStats,
 } from '../utils/seatShift.util';
+import { formatSeatLabels } from '../utils/formatLabel.util';
 
 const getActiveBookedShifts = async (seatId: string): Promise<ShiftType[]> => {
   const activeMembers = await Member.find({
@@ -53,7 +54,7 @@ const attachSeatBookings = async (seats: ISeatDocument[]) => {
     };
     seatObj.bookings = bookings;
     seatObj.bookedShifts = bookings.map((b) => b.shiftType);
-    return seatObj;
+    return formatSeatLabels(seatObj as unknown as Record<string, unknown>);
   });
 };
 

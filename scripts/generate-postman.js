@@ -327,6 +327,12 @@ const collection = {
         req('Update Member', 'PUT', `${api}/members/{{memberId}}`, {
           body: { fullName: 'Rahul Updated' },
         }),
+        req('Assign Seat (without_seat member)', 'POST', `${api}/members/{{memberId}}/assign-seat`, {
+          body: { seatId: '{{seatId}}', shiftType: 'morning' },
+        }),
+        req('Change Seat', 'POST', `${api}/members/{{memberId}}/change-seat`, {
+          body: { seatId: '{{seatId}}', shiftType: 'evening' },
+        }),
         req('Delete Member', 'DELETE', `${api}/members/{{memberId}}`, {}),
       ],
     },

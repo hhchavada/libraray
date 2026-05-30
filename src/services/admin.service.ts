@@ -6,6 +6,7 @@ import { ApiError } from '../utils/ApiError';
 import { MESSAGES } from '../constants/messages';
 import { MemberStatus, MemberType, SeatStatus } from '../constants/enums';
 import { seatService } from './seat.service';
+import { formatMemberLabels, formatSeatLabels } from '../utils/formatLabel.util';
 
 export interface AdminLibraryRow {
   libraryId: string;
@@ -57,6 +58,7 @@ export interface AdminLibraryDetail extends AdminLibraryRow {
     memberType: string;
     shiftType: string;
     status: string;
+    membershipPlan?: string | null;
     amountPaid: number;
     dueAmount: number;
     seatNumber: number | null;
@@ -258,8 +260,8 @@ export const adminService = {
         bookings?: Array<{ memberId: string; fullName: string; shiftType: string }>;
         bookedShifts?: string[];
       };
-      return {
-        id: s._id.toString(),
+      return formatSeatLabels({
+        id: String(s._id),
         seatNumber: s.seatNumber,
         status: s.status,
         cellLabel: s.cellLabel ?? null,
@@ -267,7 +269,7 @@ export const adminService = {
         gridColumn: s.gridColumn ?? null,
         bookedShifts: s.bookedShifts ?? [],
         bookings: s.bookings ?? [],
-      };
+      } as Record<string, unknown>) as AdminLibraryDetail['seatsList'][number];
     });
 
     return {
@@ -279,7 +281,7 @@ export const adminService = {
       },
       membersList: members.map((m) => {
         const seat = m.seat as { seatNumber?: number } | null | undefined;
-        return {
+        return formatMemberLabels({
           id: m._id.toString(),
           memberId: m.memberId,
           fullName: m.fullName,
@@ -290,8 +292,9 @@ export const adminService = {
           amountPaid: m.amountPaid ?? 0,
           dueAmount: m.dueAmount ?? 0,
           seatNumber: seat?.seatNumber ?? null,
-        };
-      }),
+          membershipPlan: m.membershipPlan ?? null,
+        } as Record<string, unknown>);
+      }) as AdminLibraryDetail['membersList'],
       seatsList,
     };
   },

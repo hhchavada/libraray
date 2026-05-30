@@ -373,6 +373,83 @@ export const memberService = {
     return member;
   },
 
+  async assignSeatToMember(
+    memberId: string,
+    libraryId: string,
+    seatId: string,
+    shiftType?: ShiftType
+  ): Promise<IMemberDocument> {
+    const member = await this.getMemberById(memberId);
+
+    if (member.library.toString() !== libraryId) {
+      throw new ApiError(404, MESSAGES.MEMBER_NOT_FOUND);
+    }
+
+    if (member.seat) {
+      throw new ApiError(400, MESSAGES.MEMBER_ALREADY_HAS_SEAT);
+    }
+
+    if (member.memberType === MemberType.DEMO) {
+      throw new ApiError(400, MESSAGES.VALIDATION_ERROR);
+    }
+
+    const seat = await seatService.getSeatById(seatId);
+    if (seat.library.toString() !== libraryId) {
+      throw new ApiError(400, MESSAGES.SEAT_LIBRARY_MISMATCH);
+    }
+
+    const shift = shiftType ?? member.shiftType;
+
+    await seatService.assignSeat(seatId, member._id.toString(), shift);
+    member.seat = new mongoose.Types.ObjectId(seatId);
+    member.shiftType = shift;
+
+    if (member.memberType === MemberType.WITHOUT_SEAT) {
+      member.memberType = MemberType.PERMANENT;
+    }
+
+    await member.save();
+    return member.populate('seat');
+  },
+
+  async changeMemberSeat(
+    memberId: string,
+    libraryId: string,
+    newSeatId: string,
+    shiftType?: ShiftType
+  ): Promise<IMemberDocument> {
+    const member = await this.getMemberById(memberId);
+
+    if (member.library.toString() !== libraryId) {
+      throw new ApiError(404, MESSAGES.MEMBER_NOT_FOUND);
+    }
+
+    if (!member.seat) {
+      throw new ApiError(400, MESSAGES.MEMBER_HAS_NO_SEAT);
+    }
+
+    if (member.seat.toString() === newSeatId) {
+      throw new ApiError(400, MESSAGES.SAME_SEAT_SELECTED);
+    }
+
+    const newSeat = await seatService.getSeatById(newSeatId);
+    if (newSeat.library.toString() !== libraryId) {
+      throw new ApiError(400, MESSAGES.SEAT_LIBRARY_MISMATCH);
+    }
+
+    const shift = shiftType ?? member.shiftType;
+    const oldSeatId = member.seat.toString();
+
+    await seatService.releaseSeat(oldSeatId);
+    await seatService.assignSeat(newSeatId, member._id.toString(), shift);
+
+    member.seat = new mongoose.Types.ObjectId(newSeatId);
+    member.shiftType = shift;
+    await member.save();
+
+    return member.populate('seat');
+  },
+
   async updateMember(memberId: string, data: Partial<CreatePermanentMemberData>): Promise<IMemberDocument> {
     const member = await this.getMemberById(memberId);
 
@@ -415,11 +492,6 @@ export const memberService = {
     if (data.amountPaid !== undefined) member.amountPaid = data.amountPaid;
     if (data.paymentMode) member.paymentMode = data.paymentMode as IMemberDocument['paymentMode'];
     if (data.remarks !== undefined) member.remarks = data.remarks;
-
-    if (data.seatId && data.shiftType) {
-      await seatService.assignSeat(data.seatId, member._id.toString(), data.shiftType);
-      member.seat = new mongoose.Types.ObjectId(data.seatId);
-    }
 
     await member.save();
     return member.populate('seat');

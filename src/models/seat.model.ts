@@ -1,5 +1,6 @@
 import mongoose, { Document, Schema, Types } from 'mongoose';
 import { SeatStatus, ShiftType } from '../constants/enums';
+import { formatSeatLabels } from '../utils/formatLabel.util';
 
 export interface ISeat {
   library: Types.ObjectId;
@@ -78,6 +79,11 @@ const seatSchema = new Schema<ISeatDocument>(
   },
   {
     timestamps: true,
+    toJSON: {
+      transform(_doc, ret) {
+        return formatSeatLabels(ret as Record<string, unknown>);
+      },
+    },
   }
 );
 

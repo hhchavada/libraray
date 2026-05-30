@@ -67,6 +67,11 @@ export const MESSAGES = {
   // Seat
   SEAT_NOT_AVAILABLE: 'Seat is not available',
   SEAT_ASSIGNED: 'Seat assigned successfully',
+  SEAT_CHANGED: 'Seat changed successfully',
+  MEMBER_ALREADY_HAS_SEAT: 'Member already has a seat assigned. Use change seat instead',
+  MEMBER_HAS_NO_SEAT: 'Member does not have a seat to change',
+  SAME_SEAT_SELECTED: 'Member is already assigned to this seat',
+  SEAT_LIBRARY_MISMATCH: 'Seat does not belong to this library',
   SEAT_RELEASED: 'Seat released successfully',
   SEAT_ALREADY_BOOKED: 'Seat is already booked',
   SEAT_LOCKED: 'Seat locked successfully',

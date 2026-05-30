@@ -107,4 +107,18 @@ export const memberValidation = {
       .valid(...Object.values(MemberStatus))
       .optional(),
   }),
+
+  assignSeat: Joi.object({
+    seatId: Joi.string().hex().length(24).required(),
+    shiftType: Joi.string()
+      .valid(...Object.values(ShiftType))
+      .optional(),
+  }),
+
+  changeSeat: Joi.object({
+    seatId: Joi.string().hex().length(24).required(),
+    shiftType: Joi.string()
+      .valid(...Object.values(ShiftType))
+      .optional(),
+  }),
 };
