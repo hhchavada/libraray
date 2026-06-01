@@ -117,31 +117,32 @@ export enum ReportSortOrder {
   NEWEST_FIRST = 'newest_first',
 }
 
-export enum SubscriptionPlanType {
-  BASIC = 'basic',
-  PRO = 'pro',
-  ENTERPRISE = 'enterprise',
+/** Library seat-tier for SaaS subscription plans. */
+export enum PlanCategory {
+  SMALL = 'small',
+  MEDIUM = 'medium',
+  LARGE = 'large',
+  MEGA = 'mega',
 }
 
-export enum SubscriptionStatus {
-  CREATED = 'created',
-  AUTHENTICATED = 'authenticated',
-  ACTIVE = 'active',
+export enum PlanDurationType {
+  MONTHLY = 'monthly',
+  QUARTERLY = 'quarterly',
+  HALF_YEARLY = 'half_yearly',
+  YEARLY = 'yearly',
+}
+
+export enum LibrarySubscriptionStatus {
   PENDING = 'pending',
-  HALTED = 'halted',
-  CANCELLED = 'cancelled',
-  COMPLETED = 'completed',
+  ACTIVE = 'active',
   EXPIRED = 'expired',
+  CANCELLED = 'cancelled',
 }
 
-export enum RazorpayWebhookEvent {
-  SUBSCRIPTION_ACTIVATED = 'subscription.activated',
-  SUBSCRIPTION_CHARGED = 'subscription.charged',
-  SUBSCRIPTION_CANCELLED = 'subscription.cancelled',
-  SUBSCRIPTION_HALTED = 'subscription.halted',
-  SUBSCRIPTION_COMPLETED = 'subscription.completed',
-  PAYMENT_CAPTURED = 'payment.captured',
-  PAYMENT_FAILED = 'payment.failed',
+export enum SubscriptionPaymentStatus {
+  PENDING = 'pending',
+  PAID = 'paid',
+  FAILED = 'failed',
 }
 
 export enum RevenueDateFilter {

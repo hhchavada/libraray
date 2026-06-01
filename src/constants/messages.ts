@@ -106,17 +106,23 @@ export const MESSAGES = {
   REPORT_EXPORTED: 'Report exported successfully',
 
   // Subscription
-  SUBSCRIPTION_CREATED: 'Subscription created successfully',
+  SUBSCRIPTION_ORDER_CREATED: 'Razorpay order created successfully',
   SUBSCRIPTION_ACTIVATED: 'Subscription activated successfully',
   SUBSCRIPTION_CANCELLED: 'Subscription cancelled successfully',
   SUBSCRIPTION_NOT_FOUND: 'Subscription not found',
-  SUBSCRIPTION_ALREADY_ACTIVE: 'User already has an active subscription',
+  SUBSCRIPTION_ORDER_NOT_FOUND: 'Subscription order not found',
+  SUBSCRIPTION_REPLACE_CONFIRMATION_REQUIRED:
+    'You already have an active subscription. Set confirmReplace to true to switch plans.',
   SUBSCRIPTION_PAYMENT_FAILED: 'Subscription payment failed',
-  SUBSCRIPTION_WEBHOOK_RECEIVED: 'Webhook received successfully',
-  SUBSCRIPTION_WEBHOOK_VERIFIED: 'Webhook verified successfully',
-  SUBSCRIPTION_INVALID_SIGNATURE: 'Invalid webhook signature',
+  SUBSCRIPTION_INVALID_SIGNATURE: 'Invalid payment signature',
+  SUBSCRIPTION_DUPLICATE_PAYMENT: 'This payment has already been processed',
   SUBSCRIPTION_PLANS_FETCHED: 'Subscription plans fetched successfully',
   SUBSCRIPTION_FETCHED: 'Subscription fetched successfully',
+  SUBSCRIPTION_HISTORY_FETCHED: 'Subscription history fetched successfully',
   SUBSCRIPTION_PLAN_NOT_FOUND: 'Subscription plan not found',
+  SUBSCRIPTION_PLAN_CREATED: 'Subscription plan created successfully',
+  SUBSCRIPTION_PLAN_UPDATED: 'Subscription plan updated successfully',
+  SUBSCRIPTION_PLAN_DISABLED: 'Subscription plan disabled successfully',
+  SUBSCRIPTION_ADMIN_LIST_FETCHED: 'Subscriptions fetched successfully',
   RAZORPAY_NOT_CONFIGURED: 'Razorpay credentials are not configured',
 };

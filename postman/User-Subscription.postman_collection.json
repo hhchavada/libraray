@@ -1,0 +1,232 @@
+{
+  "info": {
+    "_postman_id": "lms-user-subscription-v1",
+    "name": "LMS — User Subscription (Library Owner)",
+    "description": "Library owner subscription flow only (no admin APIs).\n\n**Flow:**\n1. **Login** — saves `accessToken`\n2. **Get All Plans** — public; saves first Small plan to `planId` (change in Tests if needed)\n3. **Create Order** — Razorpay order; saves `razorpayOrderId`, `razorpayKey`\n4. Complete payment in Razorpay Checkout (test mode), then copy `razorpay_payment_id` & `razorpay_signature` into environment\n5. **Verify Payment** — activates subscription\n6. **Get Current Subscription** / **Get History**\n\nImport `User-Subscription.postman_environment.json` and select it before running.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "auth": {
+    "type": "bearer",
+    "bearer": [
+      {
+        "key": "token",
+        "value": "{{accessToken}}",
+        "type": "string"
+      }
+    ]
+  },
+  "variable": [
+    { "key": "baseUrl", "value": "http://localhost:5000" },
+    { "key": "accessToken", "value": "" },
+    { "key": "planId", "value": "" },
+    { "key": "razorpayOrderId", "value": "" },
+    { "key": "razorpayPaymentId", "value": "" },
+    { "key": "razorpaySignature", "value": "" },
+    { "key": "razorpayKey", "value": "" },
+    { "key": "subscriptionId", "value": "" }
+  ],
+  "item": [
+    {
+      "name": "1 - Auth",
+      "item": [
+        {
+          "name": "Login (Library Owner)",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"owner@library.com\",\n  \"password\": \"password123\"\n}"
+            },
+            "url": "{{baseUrl}}/api/v1/auth/login",
+            "description": "Login as library owner. Updates `accessToken` collection variable.",
+            "auth": { "type": "noauth" }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Login successful', function () {",
+                  "  pm.response.to.have.status(200);",
+                  "});",
+                  "const res = pm.response.json();",
+                  "if (res.data && res.data.accessToken) {",
+                  "  pm.collectionVariables.set('accessToken', res.data.accessToken);",
+                  "  pm.environment.set('accessToken', res.data.accessToken);",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "2 - Subscription Plans",
+      "item": [
+        {
+          "name": "Get All Plans (Grouped)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/api/v1/subscription/plans",
+            "description": "Returns active plans grouped by Small, Medium, Large, Mega. No auth required.",
+            "auth": { "type": "noauth" }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Plans fetched', function () {",
+                  "  pm.response.to.have.status(200);",
+                  "});",
+                  "const res = pm.response.json();",
+                  "const data = res.data || {};",
+                  "const pick = data.Small?.[0] || data.Medium?.[0] || data.Large?.[0] || data.Mega?.[0];",
+                  "if (pick && pick._id) {",
+                  "  pm.collectionVariables.set('planId', pick._id);",
+                  "  pm.environment.set('planId', pick._id);",
+                  "  console.log('Saved planId:', pick._id, pick.name);",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "3 - Purchase",
+      "item": [
+        {
+          "name": "Create Razorpay Order",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"planId\": \"{{planId}}\",\n  \"confirmReplace\": false\n}"
+            },
+            "url": "{{baseUrl}}/api/v1/subscription/create-order",
+            "description": "Creates Razorpay order + Payment Link.\n\n**Open `paymentUrl` in browser** — Razorpay hosted checkout (no frontend needed).\n\nAfter payment, Razorpay redirects to callback and subscription activates automatically.\n\nOptional: use **Verify Payment** if you paid via Orders checkout instead of the link."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "if (pm.response.code === 201) {",
+                  "  const res = pm.response.json();",
+                  "  const d = res.data;",
+                  "  if (d) {",
+                  "    pm.collectionVariables.set('razorpayOrderId', d.orderId);",
+                  "    pm.collectionVariables.set('razorpayKey', d.key);",
+                  "    pm.collectionVariables.set('subscriptionId', d.subscriptionId);",
+                  "    pm.environment.set('razorpayOrderId', d.orderId);",
+                  "    pm.environment.set('razorpayKey', d.key);",
+                  "    if (d.paymentUrl) {",
+                  "      console.log('Open payment URL:', d.paymentUrl);",
+                  "    }",
+                  "  }",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        },
+        {
+          "name": "Create Order (Replace Active Plan)",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"planId\": \"{{planId}}\",\n  \"confirmReplace\": true\n}"
+            },
+            "url": "{{baseUrl}}/api/v1/subscription/create-order",
+            "description": "Use when user already has an active subscription on a **different** plan (409 without confirmReplace)."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "if (pm.response.code === 201) {",
+                  "  const d = pm.response.json().data;",
+                  "  if (d) {",
+                  "    pm.collectionVariables.set('razorpayOrderId', d.orderId);",
+                  "    pm.environment.set('razorpayOrderId', d.orderId);",
+                  "  }",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        },
+        {
+          "name": "Verify Payment",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"razorpay_order_id\": \"{{razorpayOrderId}}\",\n  \"razorpay_payment_id\": \"{{razorpayPaymentId}}\",\n  \"razorpay_signature\": \"{{razorpaySignature}}\"\n}"
+            },
+            "url": "{{baseUrl}}/api/v1/subscription/verify-payment",
+            "description": "After Razorpay Checkout success, set environment variables:\n- `razorpayPaymentId` (pay_xxx)\n- `razorpaySignature`\n\n`razorpayOrderId` is set automatically from Create Order."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Payment verified', function () {",
+                  "  pm.response.to.have.status(200);",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "4 - My Subscription",
+      "item": [
+        {
+          "name": "Get Current Active Subscription",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/api/v1/subscription/current",
+            "description": "Returns active subscription for logged-in user, or null."
+          }
+        },
+        {
+          "name": "Get Subscription History",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/api/v1/subscription/history",
+            "description": "All subscription purchases for logged-in user."
+          }
+        }
+      ]
+    }
+  ]
+}

@@ -1,17 +1,29 @@
 import { Router } from 'express';
 import { subscriptionController } from '../controllers/subscription.controller';
 import { protect } from '../middlewares/auth.middleware';
-
-/**
- * Webhook route is registered separately in app.ts BEFORE express.json()
- * to preserve the raw request body for Razorpay signature verification.
- */
+import { validate } from '../middlewares/validate';
+import { subscriptionValidation } from '../validations/subscription.validation';
 
 const router = Router();
 
-router.get('/plans', subscriptionController.getAllPlans);
-router.post('/create', protect, subscriptionController.createSubscription);
-router.get('/my', protect, subscriptionController.getMySubscription);
-router.post('/cancel', protect, subscriptionController.cancelSubscription);
+router.get('/plans', subscriptionController.getPlans);
+router.get('/payment-callback', subscriptionController.paymentCallback);
+
+router.post(
+  '/create-order',
+  protect,
+  validate(subscriptionValidation.createOrder),
+  subscriptionController.createOrder
+);
+
+router.post(
+  '/verify-payment',
+  protect,
+  validate(subscriptionValidation.verifyPayment),
+  subscriptionController.verifyPayment
+);
+
+router.get('/current', protect, subscriptionController.getCurrent);
+router.get('/history', protect, subscriptionController.getHistory);
 
 export default router;

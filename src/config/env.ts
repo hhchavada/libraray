@@ -25,4 +25,8 @@ export const ENV = {
   LIBRARY_QR_BASE_URL:
     process.env.LIBRARY_QR_BASE_URL ||
     `${process.env.APP_BASE_URL || 'http://localhost:5000'}/scan`,
+  /** Redirect after Razorpay Payment Link checkout (optional). */
+  RAZORPAY_PAYMENT_CALLBACK_URL:
+    process.env.RAZORPAY_PAYMENT_CALLBACK_URL ||
+    `${process.env.APP_BASE_URL || 'http://localhost:5000'}/api/v1/subscription/payment-callback`,
 };

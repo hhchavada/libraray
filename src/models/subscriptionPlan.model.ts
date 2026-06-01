@@ -1,15 +1,15 @@
 import mongoose, { Document, Schema } from 'mongoose';
-import { SubscriptionPlanType } from '../constants/enums';
+import { PlanCategory, PlanDurationType } from '../constants/enums';
 
 export interface ISubscriptionPlan {
   name: string;
-  planType: SubscriptionPlanType;
-  razorpayPlanId: string;
-  price: number;
-  interval: number;
-  intervalType: string;
-  maxLibraries: number;
-  features: string[];
+  category: PlanCategory;
+  seatsMin: number;
+  seatsMax: number;
+  durationType: PlanDurationType;
+  durationMonths: number;
+  amount: number;
+  currency: string;
   isActive: boolean;
   createdAt: Date;
   updatedAt: Date;
@@ -24,37 +24,40 @@ const subscriptionPlanSchema = new Schema<ISubscriptionPlanDocument>(
       required: true,
       trim: true,
     },
-    planType: {
+    category: {
       type: String,
-      enum: Object.values(SubscriptionPlanType),
-      required: true,
-      unique: true,
-    },
-    razorpayPlanId: {
-      type: String,
+      enum: Object.values(PlanCategory),
       required: true,
     },
-    price: {
+    seatsMin: {
       type: Number,
       required: true,
       min: 0,
     },
-    interval: {
+    seatsMax: {
       type: Number,
       required: true,
-      default: 1,
+      min: 1,
     },
-    intervalType: {
+    durationType: {
       type: String,
-      default: 'monthly',
+      enum: Object.values(PlanDurationType),
+      required: true,
     },
-    maxLibraries: {
+    durationMonths: {
       type: Number,
-      default: 1,
+      required: true,
+      min: 1,
     },
-    features: {
-      type: [String],
-      default: [],
+    amount: {
+      type: Number,
+      required: true,
+      min: 0,
+    },
+    currency: {
+      type: String,
+      default: 'INR',
+      uppercase: true,
     },
     isActive: {
       type: Boolean,
@@ -65,6 +68,9 @@ const subscriptionPlanSchema = new Schema<ISubscriptionPlanDocument>(
     timestamps: true,
   }
 );
+
+subscriptionPlanSchema.index({ category: 1, durationType: 1 }, { unique: true });
+subscriptionPlanSchema.index({ isActive: 1 });
 
 export const SubscriptionPlan = mongoose.model<ISubscriptionPlanDocument>(
   'SubscriptionPlan',

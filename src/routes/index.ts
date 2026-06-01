@@ -21,7 +21,7 @@ router.use('/dashboard', dashboardRouter);
 router.use('/revenue', revenueRouter);
 router.use('/expenses', expenseRouter);
 router.use('/reports', reportRouter);
-router.use('/subscriptions', subscriptionRouter);
+router.use('/subscription', subscriptionRouter);
 router.use('/public', publicRouter);
 router.use('/admin', adminRouter);
 
