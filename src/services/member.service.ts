@@ -6,12 +6,14 @@ import {
   MemberType,
   MemberStatus,
   PaymentStatus,
+  PaymentMode,
   MembershipPlan,
   MEMBERSHIP_PLAN_MONTHS,
   normalizeMembershipPlan,
   ShiftType,
 } from '../constants/enums';
 import { seatService } from './seat.service';
+import { addMonths } from '../utils/subscription.util';
 
 export interface MemberFilters {
   status?: MemberStatus;
@@ -80,6 +82,15 @@ export interface CreateMemberData {
   seatId?: string;
 }
 
+export interface RenewMemberData {
+  membershipPlan?: MembershipPlan;
+  feePerMonth?: number;
+  discount?: number;
+  amountPaid: number;
+  paymentMode: PaymentMode;
+  remarks?: string;
+}
+
 const resolvePlanMonths = (plan: MembershipPlan | string): number => {
   const normalized =
     normalizeMembershipPlan(String(plan)) ?? (plan as MembershipPlan);
@@ -115,6 +126,12 @@ const calculateFees = (data: {
   }
 
   return { feesAfterDiscount, totalFee, dueAmount, paymentStatus };
+};
+
+const resolvePaymentStatus = (amountPaid: number, dueAmount: number): PaymentStatus => {
+  if (amountPaid === 0) return PaymentStatus.UNPAID;
+  if (dueAmount === 0) return PaymentStatus.PAID;
+  return PaymentStatus.PARTIAL;
 };
 
 const buildSortQuery = (sort?: MemberSortOption): Record<string, 1 | -1> => {
@@ -447,6 +464,74 @@ export const memberService = {
     member.shiftType = shift;
     await member.save();
 
+    return member.populate('seat');
+  },
+
+  async renewMember(
+    memberId: string,
+    libraryId: string,
+    data: RenewMemberData
+  ): Promise<IMemberDocument> {
+    const member = await this.getMemberById(memberId);
+
+    if (member.library.toString() !== libraryId) {
+      throw new ApiError(404, MESSAGES.MEMBER_NOT_FOUND);
+    }
+
+    if (member.memberType === MemberType.DEMO) {
+      throw new ApiError(400, MESSAGES.MEMBER_RENEW_NOT_ALLOWED);
+    }
+
+    let membershipPlan = member.membershipPlan;
+    if (data.membershipPlan) {
+      const normalized = normalizeMembershipPlan(String(data.membershipPlan));
+      if (!normalized) {
+        throw new ApiError(400, MESSAGES.INVALID_MEMBERSHIP_PLAN);
+      }
+      membershipPlan = normalized;
+    }
+
+    if (!membershipPlan) {
+      throw new ApiError(400, MESSAGES.INVALID_MEMBERSHIP_PLAN);
+    }
+
+    const feePerMonth = data.feePerMonth ?? member.feePerMonth;
+    if (!feePerMonth) {
+      throw new ApiError(400, MESSAGES.VALIDATION_ERROR);
+    }
+
+    const discount = data.discount ?? member.discount ?? 0;
+    const planMonths = resolvePlanMonths(membershipPlan);
+
+    const now = new Date();
+    const previousEndDate = new Date(member.endDate);
+    const renewalStart = previousEndDate > now ? previousEndDate : now;
+    const newEndDate = addMonths(renewalStart, planMonths);
+
+    const renewalPeriod = calculateFees({
+      feePerMonth,
+      discount,
+      membershipPlan,
+      amountPaid: data.amountPaid,
+    });
+
+    member.membershipPlan = membershipPlan;
+    member.feePerMonth = feePerMonth;
+    member.discount = discount;
+    member.feesAfterDiscount = renewalPeriod.feesAfterDiscount;
+    member.totalFee = (member.totalFee ?? 0) + renewalPeriod.totalFee;
+    member.amountPaid = (member.amountPaid ?? 0) + data.amountPaid;
+    member.dueAmount = Math.max(0, member.totalFee - member.amountPaid);
+    member.paymentStatus = resolvePaymentStatus(member.amountPaid, member.dueAmount);
+    member.paymentMode = data.paymentMode;
+    member.endDate = newEndDate;
+    member.status = MemberStatus.ACTIVE;
+
+    if (data.remarks !== undefined) {
+      member.remarks = data.remarks;
+    }
+
+    await member.save();
     return member.populate('seat');
   },
 

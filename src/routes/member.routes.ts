@@ -12,6 +12,7 @@ router.post('/', validate(memberValidation.createMember), memberController.creat
 router.get('/', memberController.getAllMembers);
 router.post('/:id/assign-seat', validate(memberValidation.assignSeat), memberController.assignSeat);
 router.post('/:id/change-seat', validate(memberValidation.changeSeat), memberController.changeSeat);
+router.post('/:id/renew', validate(memberValidation.renewMember), memberController.renewMember);
 router.get('/:id', memberController.getMemberById);
 router.put('/:id', validate(memberValidation.updateMember), memberController.updateMember);
 router.delete('/:id', memberController.deleteMember);

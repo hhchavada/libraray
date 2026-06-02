@@ -20,6 +20,10 @@ const SEAT_LABEL_FIELDS = ['shiftType', 'status'] as const;
 export const formatMemberLabels = <T extends Record<string, unknown>>(obj: T): T => {
   const out = { ...obj } as Record<string, unknown>;
 
+  // Optional on create — always present in API responses
+  out.email = out.email != null && out.email !== '' ? out.email : '';
+  out.remarks = out.remarks != null && out.remarks !== '' ? out.remarks : '';
+
   for (const field of MEMBER_LABEL_FIELDS) {
     if (typeof out[field] === 'string') {
       out[field] = formatEnumLabel(out[field] as string);

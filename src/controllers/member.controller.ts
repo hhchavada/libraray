@@ -44,7 +44,7 @@ export const memberController = {
 
   getMemberById: asyncHandler(async (req: Request, res: Response) => {
     const member = await memberService.getMemberById(req.params.id);
-    res.status(200).json(new ApiResponse(200, MESSAGES.MEMBER_FETCHED, member));
+    res.status(200).json(new ApiResponse(200, MESSAGES.MEMBER_FETCHED, member.toJSON()));
   }),
 
   updateMember: asyncHandler(async (req: Request, res: Response) => {
@@ -74,6 +74,12 @@ export const memberController = {
       shiftType
     );
     res.status(200).json(new ApiResponse(200, MESSAGES.SEAT_CHANGED, member));
+  }),
+
+  renewMember: asyncHandler(async (req: Request, res: Response) => {
+    const libraryId = await getOwnerLibraryId(getAuthUserId(req));
+    const member = await memberService.renewMember(req.params.id, libraryId, req.body);
+    res.status(200).json(new ApiResponse(200, MESSAGES.MEMBER_RENEWED, member.toJSON()));
   }),
 
   deleteMember: asyncHandler(async (req: Request, res: Response) => {
