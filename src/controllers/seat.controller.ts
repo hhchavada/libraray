@@ -5,6 +5,14 @@ import { asyncHandler } from '../utils/asyncHandler';
 import { MESSAGES } from '../constants/messages';
 import { ShiftType } from '../constants/enums';
 
+import { getAuthUserId } from '../utils/auth.util';
+import { libraryService } from '../services/library.service';
+
+const getOwnerLibraryId = async (ownerId: string): Promise<string> => {
+  const library = await libraryService.getLibraryByOwner(ownerId);
+  return library._id.toString();
+};
+
 export const seatController = {
   getAllSeats: asyncHandler(async (req: Request, res: Response) => {
     const { libraryId } = req.params;
@@ -33,8 +41,10 @@ export const seatController = {
   }),
 
   releaseSeat: asyncHandler(async (req: Request, res: Response) => {
+    const libraryId = await getOwnerLibraryId(getAuthUserId(req));
     const { seatId } = req.params;
-    const seat = await seatService.releaseSeat(seatId);
+    const memberId = req.body.memberId as string | undefined;
+    const seat = await seatService.releaseSeat(seatId, memberId, libraryId);
     res.status(200).json(new ApiResponse(200, MESSAGES.SEAT_RELEASED, seat));
   }),
 };
