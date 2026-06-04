@@ -93,6 +93,41 @@ const expenseScript = {
   },
 };
 
+const planIdScript = {
+  listen: 'test',
+  script: {
+    type: 'text/javascript',
+    exec: [
+      'if (pm.response.code === 200) {',
+      '  const res = pm.response.json();',
+      '  const data = res.data || {};',
+      '  const pick = data.Small?.[0] || data.Medium?.[0] || data.Large?.[0] || data.Mega?.[0];',
+      '  if (pick && pick._id) {',
+      "    pm.collectionVariables.set('planId', pick._id);",
+      '  }',
+      '}',
+    ],
+  },
+};
+
+const subscriptionOrderScript = {
+  listen: 'test',
+  script: {
+    type: 'text/javascript',
+    exec: [
+      'if (pm.response.code === 201) {',
+      '  const d = pm.response.json().data;',
+      '  if (d) {',
+      "    if (d.orderId) pm.collectionVariables.set('razorpayOrderId', d.orderId);",
+      "    if (d.subscriptionId) pm.collectionVariables.set('subscriptionId', d.subscriptionId);",
+      "    if (d.key) pm.collectionVariables.set('razorpayKey', d.key);",
+      '    if (d.paymentUrl) console.log("Open payment URL:", d.paymentUrl);',
+      '  }',
+      '}',
+    ],
+  },
+};
+
 const req = (name, method, url, opts = {}) => {
   const item = {
     name,
@@ -126,9 +161,9 @@ const api = `${b}/api/v1`;
 const collection = {
   info: {
     _postman_id: 'lms-api-v2-full',
-    name: 'Library Management System API v2',
+    name: 'Library Management System API v3',
     description:
-      'Complete LMS API collection.\n\nSetup:\n1. Import environment\n2. Run Auth > Login (saves accessToken)\n3. Run Library > Create Library (saves libraryId, qrCodeId)\n4. Use other endpoints',
+      'Complete LMS API (updated).\n\nSetup:\n1. Import environment (Local or Production)\n2. Auth > Login (saves accessToken)\n3. Library > Get My Library or Create Library (saves libraryId, qrCodeId)\n4. Members / Subscription / other folders\n\nSubscription: open paymentUrl from Create Order in browser.',
     schema: 'https://schema.getpostman.com/json/collection/v2.1.0/collection.json',
   },
   auth: {
@@ -145,6 +180,12 @@ const collection = {
     { key: 'expenseId', value: '' },
     { key: 'planId', value: '' },
     { key: 'resetToken', value: '' },
+    { key: 'razorpayOrderId', value: '' },
+    { key: 'razorpayPaymentId', value: '' },
+    { key: 'razorpaySignature', value: '' },
+    { key: 'razorpayKey', value: '' },
+    { key: 'subscriptionId', value: '' },
+    { key: 'subscriptionPlanId', value: '' },
   ],
   item: [
     {
@@ -169,6 +210,7 @@ const collection = {
             endDate: '2025-05-08T00:00:00.000Z',
             courseName: 'UPSC',
             email: 'student@example.com',
+            remarks: '',
           },
           event: [memberScript],
         }),
@@ -268,11 +310,42 @@ const collection = {
       ],
     },
     {
-      name: '04 - Admin',
+      name: '04 - Admin (Super Admin)',
       item: [
-        req('Admin Dashboard', 'GET', `${api}/admin/dashboard`, {
-          event: [loginScript],
+        req('Admin Dashboard', 'GET', `${api}/admin/dashboard`, {}),
+        req('Admin Library Detail', 'GET', `${api}/admin/libraries/{{libraryId}}`, {}),
+        req('Create Subscription Plan', 'POST', `${api}/admin/subscription/plans`, {
+          body: {
+            name: 'Small Library — Monthly',
+            category: 'small',
+            seatsMin: 1,
+            seatsMax: 50,
+            durationType: 'monthly',
+            durationMonths: 1,
+            amount: 199,
+          },
+          event: [
+            {
+              listen: 'test',
+              script: {
+                type: 'text/javascript',
+                exec: [
+                  'if (pm.response.code === 201) {',
+                  '  const res = pm.response.json();',
+                  '  if (res.data && res.data._id) {',
+                  "    pm.collectionVariables.set('subscriptionPlanId', res.data._id);",
+                  '  }',
+                  '}',
+                ],
+              },
+            },
+          ],
         }),
+        req('Update Subscription Plan', 'PUT', `${api}/admin/subscription/plans/{{subscriptionPlanId}}`, {
+          body: { amount: 249 },
+        }),
+        req('Disable Subscription Plan', 'PATCH', `${api}/admin/subscription/plans/{{subscriptionPlanId}}/disable`, {}),
+        req('Get All Subscriptions (Admin)', 'GET', `${api}/admin/subscriptions`, {}),
       ],
     },
     {
@@ -293,6 +366,8 @@ const collection = {
             paymentMode: 'upi',
             amountPaid: 1500,
             seatId: '{{seatId}}',
+            email: 'rahul@example.com',
+            remarks: '',
           },
           event: [memberScript],
         }),
@@ -323,9 +398,21 @@ const collection = {
           },
         }),
         req('Get All Members', 'GET', `${api}/members?page=1&limit=10&sort=newest`, {}),
-        req('Get Member By ID', 'GET', `${api}/members/{{memberId}}`, {}),
+        req('Get Member By ID', 'GET', `${api}/members/{{memberId}}`, {
+          desc: 'Response always includes email and remarks (empty string if not set).',
+        }),
         req('Update Member', 'PUT', `${api}/members/{{memberId}}`, {
-          body: { fullName: 'Rahul Updated' },
+          body: { fullName: 'Rahul Updated', email: 'rahul@example.com', remarks: 'Updated note' },
+        }),
+        req('Renew Member Plan', 'POST', `${api}/members/{{memberId}}/renew`, {
+          desc: 'Extends endDate by membership plan (1_month, 2_months, etc.). Demo members cannot renew.',
+          body: {
+            amountPaid: 1500,
+            paymentMode: 'cash',
+            membershipPlan: '1_month',
+            remarks: 'Plan renewed',
+          },
+          event: [memberScript],
         }),
         req('Assign Seat (without_seat member)', 'POST', `${api}/members/{{memberId}}/assign-seat`, {
           body: { seatId: '{{seatId}}', shiftType: 'morning' },
@@ -379,14 +466,34 @@ const collection = {
       ],
     },
     {
-      name: '09 - Subscriptions',
+      name: '09 - Subscription (Library Owner)',
       item: [
-        req('Get Plans', 'GET', `${api}/subscriptions/plans`, { auth: false }),
-        req('Create Subscription', 'POST', `${api}/subscriptions/create`, {
-          body: { planId: '{{planId}}' },
+        req('Get Plans (Grouped)', 'GET', `${api}/subscription/plans`, {
+          auth: false,
+          event: [planIdScript],
         }),
-        req('Get My Subscription', 'GET', `${api}/subscriptions/my`, {}),
-        req('Cancel Subscription', 'POST', `${api}/subscriptions/cancel`, {}),
+        req('Create Razorpay Order', 'POST', `${api}/subscription/create-order`, {
+          body: { planId: '{{planId}}', confirmReplace: false },
+          desc: 'Returns paymentUrl — open in browser for Razorpay hosted checkout.',
+          event: [subscriptionOrderScript],
+        }),
+        req('Create Order (Replace Plan)', 'POST', `${api}/subscription/create-order`, {
+          body: { planId: '{{planId}}', confirmReplace: true },
+          event: [subscriptionOrderScript],
+        }),
+        req('Verify Payment', 'POST', `${api}/subscription/verify-payment`, {
+          body: {
+            razorpay_order_id: '{{razorpayOrderId}}',
+            razorpay_payment_id: '{{razorpayPaymentId}}',
+            razorpay_signature: '{{razorpaySignature}}',
+          },
+        }),
+        req('Get Current Subscription', 'GET', `${api}/subscription/current`, {}),
+        req('Get Subscription History', 'GET', `${api}/subscription/history`, {}),
+        req('Payment Callback (Browser)', 'GET', `${api}/subscription/payment-callback`, {
+          auth: false,
+          desc: 'Razorpay redirects here after Payment Link success (query params auto).',
+        }),
       ],
     },
   ],
@@ -397,23 +504,31 @@ fs.writeFileSync(
   JSON.stringify(collection, null, 2)
 );
 
+const envVars = [
+  { key: 'baseUrl', value: 'http://localhost:5000', enabled: true },
+  { key: 'accessToken', value: '', enabled: true },
+  { key: 'libraryId', value: '', enabled: true },
+  { key: 'qrCodeId', value: '', enabled: true },
+  { key: 'memberId', value: '', enabled: true },
+  { key: 'seatId', value: '', enabled: true },
+  { key: 'expenseId', value: '', enabled: true },
+  { key: 'planId', value: '', enabled: true },
+  { key: 'subscriptionPlanId', value: '', enabled: true },
+  { key: 'resetToken', value: '', enabled: true },
+  { key: 'razorpayOrderId', value: '', enabled: true },
+  { key: 'razorpayPaymentId', value: '', enabled: true },
+  { key: 'razorpaySignature', value: '', enabled: true },
+  { key: 'razorpayKey', value: '', enabled: true },
+  { key: 'subscriptionId', value: '', enabled: true },
+];
+
 fs.writeFileSync(
   'postman/Library-Management-System.postman_environment.json',
   JSON.stringify(
     {
-      id: 'lms-env-v2',
-      name: 'Library Management - Local',
-      values: [
-        { key: 'baseUrl', value: 'http://localhost:5000', enabled: true },
-        { key: 'accessToken', value: '', enabled: true },
-        { key: 'libraryId', value: '', enabled: true },
-        { key: 'qrCodeId', value: '', enabled: true },
-        { key: 'memberId', value: '', enabled: true },
-        { key: 'seatId', value: '', enabled: true },
-        { key: 'expenseId', value: '', enabled: true },
-        { key: 'planId', value: '', enabled: true },
-        { key: 'resetToken', value: '', enabled: true },
-      ],
+      id: 'lms-env-local',
+      name: 'LMS — Local',
+      values: envVars,
       _postman_variable_scope: 'environment',
     },
     null,
@@ -421,4 +536,22 @@ fs.writeFileSync(
   )
 );
 
-console.log('Postman collection generated successfully');
+fs.writeFileSync(
+  'postman/Library-Management-System.postman_environment.production.json',
+  JSON.stringify(
+    {
+      id: 'lms-env-production',
+      name: 'LMS — Production (Render)',
+      values: envVars.map((v) =>
+        v.key === 'baseUrl'
+          ? { ...v, value: 'https://libraray-gemm.onrender.com' }
+          : { ...v }
+      ),
+      _postman_variable_scope: 'environment',
+    },
+    null,
+    2
+  )
+);
+
+console.log('Postman collection + environments generated successfully');

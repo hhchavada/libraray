@@ -1,8 +1,8 @@
 {
   "info": {
     "_postman_id": "lms-api-v2-full",
-    "name": "Library Management System API v2",
-    "description": "Complete LMS API collection.\n\nSetup:\n1. Import environment\n2. Run Auth > Login (saves accessToken)\n3. Run Library > Create Library (saves libraryId, qrCodeId)\n4. Use other endpoints",
+    "name": "Library Management System API v3",
+    "description": "Complete LMS API (updated).\n\nSetup:\n1. Import environment (Local or Production)\n2. Auth > Login (saves accessToken)\n3. Library > Get My Library or Create Library (saves libraryId, qrCodeId)\n4. Members / Subscription / other folders\n\nSubscription: open paymentUrl from Create Order in browser.",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
   },
   "auth": {
@@ -51,6 +51,30 @@
     {
       "key": "resetToken",
       "value": ""
+    },
+    {
+      "key": "razorpayOrderId",
+      "value": ""
+    },
+    {
+      "key": "razorpayPaymentId",
+      "value": ""
+    },
+    {
+      "key": "razorpaySignature",
+      "value": ""
+    },
+    {
+      "key": "razorpayKey",
+      "value": ""
+    },
+    {
+      "key": "subscriptionId",
+      "value": ""
+    },
+    {
+      "key": "subscriptionPlanId",
+      "value": ""
     }
   ],
   "item": [
@@ -95,7 +119,7 @@
             "description": "",
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"libraryId\": \"{{libraryId}}\",\n  \"qrCodeId\": \"{{qrCodeId}}\",\n  \"fullName\": \"QR Student\",\n  \"mobileNumber\": \"9876543210\",\n  \"shiftType\": \"morning\",\n  \"startDate\": \"2025-05-01T00:00:00.000Z\",\n  \"endDate\": \"2025-05-08T00:00:00.000Z\",\n  \"courseName\": \"UPSC\",\n  \"email\": \"student@example.com\"\n}"
+              "raw": "{\n  \"libraryId\": \"{{libraryId}}\",\n  \"qrCodeId\": \"{{qrCodeId}}\",\n  \"fullName\": \"QR Student\",\n  \"mobileNumber\": \"9876543210\",\n  \"shiftType\": \"morning\",\n  \"startDate\": \"2025-05-01T00:00:00.000Z\",\n  \"endDate\": \"2025-05-08T00:00:00.000Z\",\n  \"courseName\": \"UPSC\",\n  \"email\": \"student@example.com\",\n  \"remarks\": \"\"\n}"
             },
             "auth": {
               "type": "noauth"
@@ -588,7 +612,7 @@
       ]
     },
     {
-      "name": "04 - Admin",
+      "name": "04 - Admin (Super Admin)",
       "item": [
         {
           "name": "Admin Dashboard",
@@ -597,6 +621,33 @@
             "header": [],
             "url": "{{baseUrl}}/api/v1/admin/dashboard",
             "description": ""
+          }
+        },
+        {
+          "name": "Admin Library Detail",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/api/v1/admin/libraries/{{libraryId}}",
+            "description": ""
+          }
+        },
+        {
+          "name": "Create Subscription Plan",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/api/v1/admin/subscription/plans",
+            "description": "",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Small Library — Monthly\",\n  \"category\": \"small\",\n  \"seatsMin\": 1,\n  \"seatsMax\": 50,\n  \"durationType\": \"monthly\",\n  \"durationMonths\": 1,\n  \"amount\": 199\n}"
+            }
           },
           "event": [
             {
@@ -604,16 +655,52 @@
               "script": {
                 "type": "text/javascript",
                 "exec": [
-                  "if (pm.response.code === 200) {",
+                  "if (pm.response.code === 201) {",
                   "  const res = pm.response.json();",
-                  "  if (res.data && res.data.accessToken) {",
-                  "    pm.collectionVariables.set('accessToken', res.data.accessToken);",
+                  "  if (res.data && res.data._id) {",
+                  "    pm.collectionVariables.set('subscriptionPlanId', res.data._id);",
                   "  }",
                   "}"
                 ]
               }
             }
           ]
+        },
+        {
+          "name": "Update Subscription Plan",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/api/v1/admin/subscription/plans/{{subscriptionPlanId}}",
+            "description": "",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"amount\": 249\n}"
+            }
+          }
+        },
+        {
+          "name": "Disable Subscription Plan",
+          "request": {
+            "method": "PATCH",
+            "header": [],
+            "url": "{{baseUrl}}/api/v1/admin/subscription/plans/{{subscriptionPlanId}}/disable",
+            "description": ""
+          }
+        },
+        {
+          "name": "Get All Subscriptions (Admin)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/api/v1/admin/subscriptions",
+            "description": ""
+          }
         }
       ]
     },
@@ -634,7 +721,7 @@
             "description": "",
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"type\": \"permanent\",\n  \"fullName\": \"Rahul Sharma\",\n  \"mobileNumber\": \"9123456789\",\n  \"membershipPlan\": \"1_month\",\n  \"shiftType\": \"morning\",\n  \"startDate\": \"2025-05-01T00:00:00.000Z\",\n  \"endDate\": \"2025-06-01T00:00:00.000Z\",\n  \"feePerMonth\": 2000,\n  \"discount\": 10,\n  \"paymentStatus\": \"partial\",\n  \"paymentMode\": \"upi\",\n  \"amountPaid\": 1500,\n  \"seatId\": \"{{seatId}}\"\n}"
+              "raw": "{\n  \"type\": \"permanent\",\n  \"fullName\": \"Rahul Sharma\",\n  \"mobileNumber\": \"9123456789\",\n  \"membershipPlan\": \"1_month\",\n  \"shiftType\": \"morning\",\n  \"startDate\": \"2025-05-01T00:00:00.000Z\",\n  \"endDate\": \"2025-06-01T00:00:00.000Z\",\n  \"feePerMonth\": 2000,\n  \"discount\": 10,\n  \"paymentStatus\": \"partial\",\n  \"paymentMode\": \"upi\",\n  \"amountPaid\": 1500,\n  \"seatId\": \"{{seatId}}\",\n  \"email\": \"rahul@example.com\",\n  \"remarks\": \"\"\n}"
             }
           },
           "event": [
@@ -721,7 +808,7 @@
             "method": "GET",
             "header": [],
             "url": "{{baseUrl}}/api/v1/members/{{memberId}}",
-            "description": ""
+            "description": "Response always includes email and remarks (empty string if not set)."
           }
         },
         {
@@ -738,9 +825,43 @@
             "description": "",
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"fullName\": \"Rahul Updated\"\n}"
+              "raw": "{\n  \"fullName\": \"Rahul Updated\",\n  \"email\": \"rahul@example.com\",\n  \"remarks\": \"Updated note\"\n}"
             }
           }
+        },
+        {
+          "name": "Renew Member Plan",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/api/v1/members/{{memberId}}/renew",
+            "description": "Extends endDate by membership plan (1_month, 2_months, etc.). Demo members cannot renew.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"amountPaid\": 1500,\n  \"paymentMode\": \"cash\",\n  \"membershipPlan\": \"1_month\",\n  \"remarks\": \"Plan renewed\"\n}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "if (pm.response.code === 201) {",
+                  "  const res = pm.response.json();",
+                  "  if (res.data && res.data._id) {",
+                  "    pm.collectionVariables.set('memberId', res.data._id);",
+                  "  }",
+                  "}"
+                ]
+              }
+            }
+          ]
         },
         {
           "name": "Assign Seat (without_seat member)",
@@ -961,22 +1082,40 @@
       ]
     },
     {
-      "name": "09 - Subscriptions",
+      "name": "09 - Subscription (Library Owner)",
       "item": [
         {
-          "name": "Get Plans",
+          "name": "Get Plans (Grouped)",
           "request": {
             "method": "GET",
             "header": [],
-            "url": "{{baseUrl}}/api/v1/subscriptions/plans",
+            "url": "{{baseUrl}}/api/v1/subscription/plans",
             "description": "",
             "auth": {
               "type": "noauth"
             }
-          }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "if (pm.response.code === 200) {",
+                  "  const res = pm.response.json();",
+                  "  const data = res.data || {};",
+                  "  const pick = data.Small?.[0] || data.Medium?.[0] || data.Large?.[0] || data.Mega?.[0];",
+                  "  if (pick && pick._id) {",
+                  "    pm.collectionVariables.set('planId', pick._id);",
+                  "  }",
+                  "}"
+                ]
+              }
+            }
+          ]
         },
         {
-          "name": "Create Subscription",
+          "name": "Create Razorpay Order",
           "request": {
             "method": "POST",
             "header": [
@@ -985,30 +1124,116 @@
                 "value": "application/json"
               }
             ],
-            "url": "{{baseUrl}}/api/v1/subscriptions/create",
+            "url": "{{baseUrl}}/api/v1/subscription/create-order",
+            "description": "Returns paymentUrl — open in browser for Razorpay hosted checkout.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"planId\": \"{{planId}}\",\n  \"confirmReplace\": false\n}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "if (pm.response.code === 201) {",
+                  "  const d = pm.response.json().data;",
+                  "  if (d) {",
+                  "    if (d.orderId) pm.collectionVariables.set('razorpayOrderId', d.orderId);",
+                  "    if (d.subscriptionId) pm.collectionVariables.set('subscriptionId', d.subscriptionId);",
+                  "    if (d.key) pm.collectionVariables.set('razorpayKey', d.key);",
+                  "    if (d.paymentUrl) console.log(\"Open payment URL:\", d.paymentUrl);",
+                  "  }",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Create Order (Replace Plan)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/api/v1/subscription/create-order",
             "description": "",
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"planId\": \"{{planId}}\"\n}"
+              "raw": "{\n  \"planId\": \"{{planId}}\",\n  \"confirmReplace\": true\n}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "if (pm.response.code === 201) {",
+                  "  const d = pm.response.json().data;",
+                  "  if (d) {",
+                  "    if (d.orderId) pm.collectionVariables.set('razorpayOrderId', d.orderId);",
+                  "    if (d.subscriptionId) pm.collectionVariables.set('subscriptionId', d.subscriptionId);",
+                  "    if (d.key) pm.collectionVariables.set('razorpayKey', d.key);",
+                  "    if (d.paymentUrl) console.log(\"Open payment URL:\", d.paymentUrl);",
+                  "  }",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Verify Payment",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/api/v1/subscription/verify-payment",
+            "description": "",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"razorpay_order_id\": \"{{razorpayOrderId}}\",\n  \"razorpay_payment_id\": \"{{razorpayPaymentId}}\",\n  \"razorpay_signature\": \"{{razorpaySignature}}\"\n}"
             }
           }
         },
         {
-          "name": "Get My Subscription",
+          "name": "Get Current Subscription",
           "request": {
             "method": "GET",
             "header": [],
-            "url": "{{baseUrl}}/api/v1/subscriptions/my",
+            "url": "{{baseUrl}}/api/v1/subscription/current",
             "description": ""
           }
         },
         {
-          "name": "Cancel Subscription",
+          "name": "Get Subscription History",
           "request": {
-            "method": "POST",
+            "method": "GET",
             "header": [],
-            "url": "{{baseUrl}}/api/v1/subscriptions/cancel",
+            "url": "{{baseUrl}}/api/v1/subscription/history",
             "description": ""
+          }
+        },
+        {
+          "name": "Payment Callback (Browser)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/api/v1/subscription/payment-callback",
+            "description": "Razorpay redirects here after Payment Link success (query params auto).",
+            "auth": {
+              "type": "noauth"
+            }
           }
         }
       ]

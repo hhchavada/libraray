@@ -8,7 +8,8 @@
     "build": "tsc",
     "start": "node dist/server.js",
     "lint": "eslint src/**/*.ts",
-    "seed:subscription-plans": "ts-node scripts/seed-subscription-plans.ts"
+    "seed:subscription-plans": "ts-node scripts/seed-subscription-plans.ts",
+    "postman:generate": "node scripts/generate-postman.js"
   },
   "keywords": [
     "express",
