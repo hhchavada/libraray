@@ -147,6 +147,11 @@ const resolvePaymentStatus = (amountPaid: number, dueAmount: number): PaymentSta
   return PaymentStatus.PARTIAL;
 };
 
+const remarksForDb = (remarks?: string | null): string | undefined => {
+  const trimmed = remarks?.trim();
+  return trimmed ? trimmed : undefined;
+};
+
 const buildSortQuery = (sort?: MemberSortOption): Record<string, 1 | -1> => {
   switch (sort) {
     case 'name_asc':
@@ -278,7 +283,7 @@ export const memberService = {
       dueAmount,
       paymentStatus,
       paymentMode: data.paymentMode,
-      remarks: data.remarks,
+      ...(remarksForDb(data.remarks) ? { remarks: remarksForDb(data.remarks) } : {}),
     });
 
     if (data.seatId) {
@@ -304,11 +309,14 @@ export const memberService = {
       memberType: MemberType.DEMO,
       shiftType: data.shiftType,
       startDate: data.startDate,
-      remarks: data.remarks,
     };
 
     if (data.endDate) {
       payload.endDate = data.endDate;
+    }
+    const remarks = remarksForDb(data.remarks);
+    if (remarks) {
+      payload.remarks = remarks;
     }
 
     return Member.create(payload);
@@ -346,7 +354,7 @@ export const memberService = {
       dueAmount,
       paymentStatus,
       paymentMode: data.paymentMode,
-      remarks: data.remarks,
+      ...(remarksForDb(data.remarks) ? { remarks: remarksForDb(data.remarks) } : {}),
     });
   },
 
@@ -547,7 +555,7 @@ export const memberService = {
     member.status = MemberStatus.ACTIVE;
 
     if (data.remarks !== undefined) {
-      member.remarks = data.remarks;
+      member.remarks = remarksForDb(data.remarks);
     }
 
     await member.save();
@@ -627,7 +635,7 @@ export const memberService = {
     member.status = MemberStatus.ACTIVE;
 
     if (data.remarks !== undefined) {
-      member.remarks = data.remarks;
+      member.remarks = remarksForDb(data.remarks);
     }
 
     await member.save();
@@ -675,7 +683,9 @@ export const memberService = {
     }
     if (data.amountPaid !== undefined) member.amountPaid = data.amountPaid;
     if (data.paymentMode) member.paymentMode = data.paymentMode as IMemberDocument['paymentMode'];
-    if (data.remarks !== undefined) member.remarks = data.remarks;
+    if (data.remarks !== undefined) {
+      member.remarks = remarksForDb(data.remarks);
+    }
 
     await member.save();
     return member.populate('seat');

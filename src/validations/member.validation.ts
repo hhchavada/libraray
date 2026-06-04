@@ -38,6 +38,9 @@ const normalizeShiftType = (value: string, helpers: Joi.CustomHelpers) => {
   return normalized;
 };
 
+/** Optional everywhere — omit, null, or empty string are all valid. */
+export const optionalRemarks = Joi.string().trim().optional().allow(null, '').empty(['', null]);
+
 export const memberIdParam = Joi.object({
   id: Joi.string().hex().length(24).required().messages({
     'string.hex': MESSAGES.INVALID_MEMBER_ID,
@@ -70,7 +73,7 @@ const baseMemberFields = {
   courseName: Joi.string().optional(),
   // email is optional for all member types
   email: Joi.string().email().optional().allow('', null),
-  remarks: Joi.string().optional(),
+  remarks: optionalRemarks,
 };
 
 export const memberValidation = {
@@ -133,7 +136,7 @@ export const memberValidation = {
     courseName: Joi.string().optional(),
     // email is optional — allow empty string or null
     email: Joi.string().email().optional().allow('', null),
-    remarks: Joi.string().optional(),
+    remarks: optionalRemarks,
     membershipPlan: membershipPlanSchema.optional(),
     feePerMonth: Joi.number().positive().optional(),
     discount: Joi.number().min(0).optional(),
@@ -179,7 +182,7 @@ export const memberValidation = {
     paymentMode: Joi.string()
       .valid(...Object.values(PaymentMode))
       .required(),
-    remarks: Joi.string().optional().allow(''),
+    remarks: optionalRemarks,
   }),
 
   convertDemoToPermanent: Joi.object({
@@ -195,6 +198,6 @@ export const memberValidation = {
       'string.hex': MESSAGES.INVALID_SEAT_ID,
       'string.length': MESSAGES.INVALID_SEAT_ID,
     }),
-    remarks: Joi.string().optional().allow(''),
+    remarks: optionalRemarks,
   }),
 };

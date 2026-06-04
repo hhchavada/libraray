@@ -1,5 +1,6 @@
 import Joi from 'joi';
 import { ShiftType } from '../constants/enums';
+import { optionalRemarks } from './member.validation';
 
 export const scanValidation = {
   getLibraryInfo: Joi.object({
@@ -26,6 +27,6 @@ export const scanValidation = {
       .empty(['', null]),
     courseName: Joi.string().optional().allow(''),
     email: Joi.string().email().optional().allow(''),
-    remarks: Joi.string().optional().allow(''),
+    remarks: optionalRemarks,
   }),
 };

@@ -119,7 +119,7 @@
             "description": "",
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"libraryId\": \"{{libraryId}}\",\n  \"qrCodeId\": \"{{qrCodeId}}\",\n  \"fullName\": \"QR Student\",\n  \"mobileNumber\": \"9876543210\",\n  \"shiftType\": \"morning\",\n  \"startDate\": \"2025-05-01T00:00:00.000Z\",\n  \"endDate\": \"2025-05-08T00:00:00.000Z\",\n  \"courseName\": \"UPSC\",\n  \"email\": \"student@example.com\",\n  \"remarks\": \"\"\n}"
+              "raw": "{\n  \"libraryId\": \"{{libraryId}}\",\n  \"qrCodeId\": \"{{qrCodeId}}\",\n  \"fullName\": \"QR Student\",\n  \"mobileNumber\": \"9876543210\",\n  \"shiftType\": \"morning\",\n  \"startDate\": \"2025-05-01T00:00:00.000Z\",\n  \"endDate\": \"2025-05-08T00:00:00.000Z\",\n  \"courseName\": \"UPSC\",\n  \"email\": \"student@example.com\"\n}"
             },
             "auth": {
               "type": "noauth"
@@ -721,7 +721,7 @@
             "description": "",
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"type\": \"permanent\",\n  \"fullName\": \"Rahul Sharma\",\n  \"mobileNumber\": \"9123456789\",\n  \"membershipPlan\": \"1_month\",\n  \"shiftType\": \"morning\",\n  \"startDate\": \"2025-05-01T00:00:00.000Z\",\n  \"endDate\": \"2025-06-01T00:00:00.000Z\",\n  \"feePerMonth\": 2000,\n  \"discount\": 10,\n  \"paymentStatus\": \"partial\",\n  \"paymentMode\": \"upi\",\n  \"amountPaid\": 1500,\n  \"seatId\": \"{{seatId}}\",\n  \"email\": \"rahul@example.com\",\n  \"remarks\": \"\"\n}"
+              "raw": "{\n  \"type\": \"permanent\",\n  \"fullName\": \"Rahul Sharma\",\n  \"mobileNumber\": \"9123456789\",\n  \"membershipPlan\": \"1_month\",\n  \"shiftType\": \"morning\",\n  \"startDate\": \"2025-05-01T00:00:00.000Z\",\n  \"endDate\": \"2025-06-01T00:00:00.000Z\",\n  \"feePerMonth\": 2000,\n  \"discount\": 10,\n  \"paymentStatus\": \"partial\",\n  \"paymentMode\": \"upi\",\n  \"amountPaid\": 1500,\n  \"seatId\": \"{{seatId}}\",\n  \"email\": \"rahul@example.com\"\n}"
             }
           },
           "event": [
@@ -825,7 +825,7 @@
             "description": "",
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"fullName\": \"Rahul Updated\",\n  \"email\": \"rahul@example.com\",\n  \"remarks\": \"Updated note\"\n}"
+              "raw": "{\n  \"fullName\": \"Rahul Updated\",\n  \"email\": \"rahul@example.com\"\n}"
             }
           }
         },
@@ -843,7 +843,7 @@
             "description": "Converts a demo member to permanent with plan, fees, endDate, and optional seatId.",
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"membershipPlan\": \"1_month\",\n  \"feePerMonth\": 2000,\n  \"discount\": 0,\n  \"endDate\": \"2025-06-01T00:00:00.000Z\",\n  \"amountPaid\": 2000,\n  \"paymentMode\": \"upi\",\n  \"seatId\": \"{{seatId}}\",\n  \"remarks\": \"Converted from demo\"\n}"
+              "raw": "{\n  \"membershipPlan\": \"1_month\",\n  \"feePerMonth\": 2000,\n  \"discount\": 0,\n  \"endDate\": \"2025-06-01T00:00:00.000Z\",\n  \"amountPaid\": 2000,\n  \"paymentMode\": \"upi\",\n  \"seatId\": \"{{seatId}}\"\n}"
             }
           },
           "event": [
@@ -877,7 +877,7 @@
             "description": "Extends endDate by membership plan (1_month, 2_months, etc.). Demo members cannot renew.",
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"amountPaid\": 1500,\n  \"paymentMode\": \"cash\",\n  \"membershipPlan\": \"1_month\",\n  \"remarks\": \"Plan renewed\"\n}"
+              "raw": "{\n  \"amountPaid\": 1500,\n  \"paymentMode\": \"cash\",\n  \"membershipPlan\": \"1_month\"\n}"
             }
           },
           "event": [

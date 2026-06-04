@@ -48,7 +48,7 @@ export const scanService = {
         memberType: MemberType.DEMO,
         email: data.email || undefined,
         courseName: data.courseName || undefined,
-        remarks: data.remarks || undefined,
+        remarks: data.remarks?.trim() ? data.remarks.trim() : undefined,
       },
       libraryId
     );
