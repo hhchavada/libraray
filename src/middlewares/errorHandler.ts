@@ -20,7 +20,14 @@ export const errorHandler = (
 
   // Mongoose cast error (invalid ObjectId)
   if (err instanceof mongoose.Error.CastError) {
-    error = new ApiError(400, MESSAGES.VALIDATION_ERROR);
+    const path = err.path ?? '';
+    const message =
+      path === 'seat'
+        ? MESSAGES.INVALID_SEAT_REFERENCE
+        : path
+          ? `Invalid ${path}`
+          : MESSAGES.VALIDATION_ERROR;
+    error = new ApiError(400, message);
   }
 
   // Mongoose duplicate key error (code 11000)

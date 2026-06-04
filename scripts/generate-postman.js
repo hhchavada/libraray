@@ -404,6 +404,20 @@ const collection = {
         req('Update Member', 'PUT', `${api}/members/{{memberId}}`, {
           body: { fullName: 'Rahul Updated', email: 'rahul@example.com', remarks: 'Updated note' },
         }),
+        req('Convert Demo to Permanent', 'POST', `${api}/members/{{memberId}}/convert-to-permanent`, {
+          desc: 'Converts a demo member to permanent with plan, fees, endDate, and optional seatId.',
+          body: {
+            membershipPlan: '1_month',
+            feePerMonth: 2000,
+            discount: 0,
+            endDate: '2025-06-01T00:00:00.000Z',
+            amountPaid: 2000,
+            paymentMode: 'upi',
+            seatId: '{{seatId}}',
+            remarks: 'Converted from demo',
+          },
+          event: [memberScript],
+        }),
         req('Renew Member Plan', 'POST', `${api}/members/{{memberId}}/renew`, {
           desc: 'Extends endDate by membership plan (1_month, 2_months, etc.). Demo members cannot renew.',
           body: {

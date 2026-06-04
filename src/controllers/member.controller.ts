@@ -65,58 +65,27 @@ export const memberController = {
   }),
 
   changeSeat: asyncHandler(async (req: Request, res: Response) => {
-    try {
-      console.log('[changeSeat] ▶ ENTERED CONTROLLER');
-      console.log('[changeSeat] req.body:', JSON.stringify(req.body));
-      console.log('[changeSeat] req.params.id:', req.params.id);
-      
-      const libraryId = await getOwnerLibraryId(getAuthUserId(req));
-      console.log('[changeSeat] libraryId:', libraryId);
-      
-      const { seatId } = req.body;
-      let { shiftType } = req.body;
-      
-      if (shiftType === 'fullDay') {
-        shiftType = 'full_day';
-      }
+    const libraryId = await getOwnerLibraryId(getAuthUserId(req));
+    const { seatId, shiftType } = req.body;
+    const member = await memberService.changeMemberSeat(
+      req.params.id,
+      libraryId,
+      seatId,
+      shiftType
+    );
+    res.status(200).json(new ApiResponse(200, MESSAGES.SEAT_CHANGED, member));
+  }),
 
-      console.log('[changeSeat] seatId:', seatId, '| shiftType:', shiftType);
-
-      const member = await memberService.changeMemberSeat(
-        req.params.id,
-        libraryId,
-        seatId,
-        shiftType
-      );
-      
-      console.log('[changeSeat] ✅ SUCCESS');
-      res.status(200).json({
-        success: true,
-        statusCode: 200,
-        message: 'Seat changed successfully',
-        data: { updatedMember: member }
-      });
-    } catch (error: any) {
-      console.log('[changeSeat] ❌ ERROR:', error.message, '| statusCode:', error.statusCode);
-      console.log('[changeSeat] Full error:', error.stack);
-      
-      let statusCode = error.statusCode || 500;
-      let message = error.message || 'Internal server error';
-
-      if (message === MESSAGES.SEAT_ALREADY_BOOKED) {
-        statusCode = 409;
-        message = 'Seat is already occupied for the requested shift';
-      } else if (message === MESSAGES.MEMBER_NOT_FOUND || message === MESSAGES.SEAT_NOT_FOUND) {
-        statusCode = 404;
-      }
-
-      res.status(statusCode).json({
-        success: false,
-        statusCode,
-        message,
-        data: null
-      });
-    }
+  convertDemoToPermanent: asyncHandler(async (req: Request, res: Response) => {
+    const libraryId = await getOwnerLibraryId(getAuthUserId(req));
+    const member = await memberService.convertDemoToPermanent(
+      req.params.id,
+      libraryId,
+      req.body
+    );
+    res
+      .status(200)
+      .json(new ApiResponse(200, MESSAGES.MEMBER_CONVERTED_TO_PERMANENT, member.toJSON()));
   }),
 
   renewMember: asyncHandler(async (req: Request, res: Response) => {

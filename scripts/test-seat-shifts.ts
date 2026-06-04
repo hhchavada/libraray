@@ -28,7 +28,10 @@ assert('empty seat → evening available', isSeatAvailableForShift([], ShiftType
 assert('morning booked → evening still available', isSeatAvailableForShift([ShiftType.MORNING], ShiftType.EVENING));
 assert('morning booked → morning not available', !isSeatAvailableForShift([ShiftType.MORNING], ShiftType.MORNING));
 assert('evening booked → morning still available', isSeatAvailableForShift([ShiftType.EVENING], ShiftType.MORNING));
+assert('evening booked → evening not available', !isSeatAvailableForShift([ShiftType.EVENING], ShiftType.EVENING));
+assert('evening booked → full_day not available', !isSeatAvailableForShift([ShiftType.EVENING], ShiftType.FULL_DAY));
 assert('morning+evening → neither shift available', !isSeatAvailableForShift([ShiftType.MORNING, ShiftType.EVENING], ShiftType.MORNING));
+assert('morning+evening → full_day not available', !isSeatAvailableForShift([ShiftType.MORNING, ShiftType.EVENING], ShiftType.FULL_DAY));
 assert('full_day → blocks morning', !isSeatAvailableForShift([ShiftType.FULL_DAY], ShiftType.MORNING));
 
 console.log('\n--- User scenario: 3 students, 2 seats ---\n');

@@ -25,6 +25,35 @@ const getActiveBookedShifts = async (seatId: string): Promise<ShiftType[]> => {
   return activeMembers.map((m) => m.shiftType);
 };
 
+/** Sync seat.status / assignedTo / shiftType from active members on that seat. */
+const syncSeatFromMembers = async (seatId: string): Promise<ISeatDocument> => {
+  const seat = await Seat.findById(seatId);
+  if (!seat) {
+    throw new ApiError(404, MESSAGES.SEAT_NOT_FOUND);
+  }
+
+  const remainingMembers = await Member.find({
+    seat: seatId,
+    status: MemberStatus.ACTIVE,
+  }).sort({ createdAt: 1 });
+
+  if (remainingMembers.length === 0) {
+    seat.status = SeatStatus.AVAILABLE;
+    seat.assignedTo = null;
+    seat.shiftType = null;
+    seat.lockedAt = null;
+  } else {
+    const primary = remainingMembers[0];
+    seat.assignedTo = primary._id;
+    seat.shiftType = primary.shiftType;
+    seat.status = SeatStatus.BOOKED;
+    seat.lockedAt = null;
+  }
+
+  await seat.save();
+  return seat;
+};
+
 const attachSeatBookings = async (seats: ISeatDocument[]) => {
   const seatIds = seats.map((s) => s._id);
 
@@ -160,7 +189,7 @@ export const seatService = {
     return seat;
   },
 
-  async assignSeat(seatId: string, memberId: string, shiftType: ShiftType): Promise<ISeatDocument> {
+  async assignSeat(seatId: string, _memberId: string, shiftType: ShiftType): Promise<ISeatDocument> {
     const seat = await this.getSeatById(seatId);
 
     const isAvailable = await this.isSeatAvailableForShift(seatId, shiftType);
@@ -169,26 +198,14 @@ export const seatService = {
     }
 
     seat.status = SeatStatus.BOOKED;
-    seat.assignedTo = new mongoose.Types.ObjectId(memberId);
-    seat.shiftType = shiftType;
     seat.lockedAt = null;
     await seat.save();
 
-    const bookedShifts = await getActiveBookedShifts(seatId);
-    if (bookedShifts.length > 1) {
-      const morningMember = await Member.findOne({
-        seat: seatId,
-        status: MemberStatus.ACTIVE,
-        shiftType: ShiftType.MORNING,
-      });
-      if (morningMember && shiftType === ShiftType.EVENING) {
-        seat.assignedTo = morningMember._id;
-        seat.shiftType = ShiftType.MORNING;
-        await seat.save();
-      }
-    }
-
     return seat;
+  },
+
+  async syncSeatFromMembers(seatId: string): Promise<ISeatDocument> {
+    return syncSeatFromMembers(seatId);
   },
 
   async releaseSeat(seatId: string, memberId?: string, libraryId?: string): Promise<ISeatDocument> {
@@ -214,29 +231,7 @@ export const seatService = {
       await member.save();
     }
 
-    // Re-query remaining active members still linked to this seat
-    const remainingMembers = await Member.find({
-      seat: seatId,
-      status: MemberStatus.ACTIVE,
-    }).sort({ createdAt: 1 });
-
-    if (remainingMembers.length === 0) {
-      // No members left — mark seat as available
-      seat.status = SeatStatus.AVAILABLE;
-      seat.assignedTo = null;
-      seat.shiftType = null;
-      seat.lockedAt = null;
-    } else {
-      // Promote the earliest remaining member as the primary assignee
-      const primary = remainingMembers[0];
-      seat.assignedTo = primary._id;
-      seat.shiftType = primary.shiftType;
-      seat.status = SeatStatus.BOOKED;
-      seat.lockedAt = null;
-    }
-
-    await seat.save();
-    return seat;
+    return syncSeatFromMembers(seatId);
   },
 
   async getShiftSeatStats(libraryId: string): Promise<ShiftSeatStats> {
@@ -309,7 +304,7 @@ export const seatService = {
 
   async getSeatById(seatId: string): Promise<ISeatDocument> {
     if (!mongoose.Types.ObjectId.isValid(seatId)) {
-      throw new ApiError(400, MESSAGES.VALIDATION_ERROR);
+      throw new ApiError(400, MESSAGES.INVALID_SEAT_ID);
     }
 
     const seat = await Seat.findById(seatId);

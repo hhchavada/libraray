@@ -6,6 +6,7 @@ import {
   MemberStatus,
   normalizeMembershipPlan,
 } from '../constants/enums';
+import { MESSAGES } from '../constants/messages';
 
 const MEMBER_TYPES = ['permanent', 'demo', 'without-seat'] as const;
 
@@ -16,6 +17,34 @@ const membershipPlanSchema = Joi.string().custom((value, helpers) => {
   }
   return plan;
 }, 'membership plan');
+
+const normalizeShiftType = (value: string, helpers: Joi.CustomHelpers) => {
+  if (value === undefined || value === null || value === '') {
+    return value;
+  }
+  const raw = String(value).trim();
+  const key = raw.toLowerCase().replace(/\s+/g, '_');
+  const aliases: Record<string, ShiftType> = {
+    morning: ShiftType.MORNING,
+    evening: ShiftType.EVENING,
+    full_day: ShiftType.FULL_DAY,
+    fullday: ShiftType.FULL_DAY,
+    fullDay: ShiftType.FULL_DAY,
+  };
+  const normalized = aliases[key] ?? aliases[raw];
+  if (!normalized) {
+    return helpers.error('any.invalid');
+  }
+  return normalized;
+};
+
+export const memberIdParam = Joi.object({
+  id: Joi.string().hex().length(24).required().messages({
+    'string.hex': MESSAGES.INVALID_MEMBER_ID,
+    'string.length': MESSAGES.INVALID_MEMBER_ID,
+    'any.required': MESSAGES.INVALID_MEMBER_ID,
+  }),
+});
 
 // Base fields shared by all member types
 const baseMemberFields = {
@@ -117,17 +146,24 @@ export const memberValidation = {
   }),
 
   assignSeat: Joi.object({
-    seatId: Joi.string().hex().length(24).required(),
-    shiftType: Joi.string()
-      .valid(...Object.values(ShiftType))
-      .optional(),
+    seatId: Joi.string().hex().length(24).required().messages({
+      'string.hex': MESSAGES.INVALID_SEAT_ID,
+      'string.length': MESSAGES.INVALID_SEAT_ID,
+      'any.required': MESSAGES.INVALID_SEAT_ID,
+    }),
+    shiftType: Joi.string().custom(normalizeShiftType, 'shift type').optional(),
   }),
 
   changeSeat: Joi.object({
-    seatId: Joi.string().hex().length(24).required(),
-    shiftType: Joi.string()
-      .valid(...Object.values(ShiftType), 'fullDay')
-      .optional(),
+    seatId: Joi.string().hex().length(24).required().messages({
+      'string.hex': MESSAGES.INVALID_SEAT_ID,
+      'string.length': MESSAGES.INVALID_SEAT_ID,
+      'any.required': MESSAGES.INVALID_SEAT_ID,
+    }),
+    shiftType: Joi.string().custom(normalizeShiftType, 'shift type').required().messages({
+      'any.required': 'shiftType is required',
+      'any.invalid': 'shiftType must be morning, evening, or full_day',
+    }),
   }),
 
   renewMember: Joi.object({
@@ -138,6 +174,22 @@ export const memberValidation = {
     paymentMode: Joi.string()
       .valid(...Object.values(PaymentMode))
       .required(),
+    remarks: Joi.string().optional().allow(''),
+  }),
+
+  convertDemoToPermanent: Joi.object({
+    membershipPlan: membershipPlanSchema.required(),
+    feePerMonth: Joi.number().positive().required(),
+    discount: Joi.number().min(0).max(Joi.ref('feePerMonth')).optional(),
+    endDate: Joi.date().iso().required(),
+    amountPaid: Joi.number().min(0).required(),
+    paymentMode: Joi.string()
+      .valid(...Object.values(PaymentMode))
+      .required(),
+    seatId: Joi.string().hex().length(24).optional().messages({
+      'string.hex': MESSAGES.INVALID_SEAT_ID,
+      'string.length': MESSAGES.INVALID_SEAT_ID,
+    }),
     remarks: Joi.string().optional().allow(''),
   }),
 };

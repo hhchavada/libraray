@@ -3,6 +3,9 @@ export const MESSAGES = {
   ROUTE_NOT_FOUND: 'Route not found',
   INTERNAL_SERVER_ERROR: 'Internal server error',
   VALIDATION_ERROR: 'Validation error',
+  INVALID_MEMBER_ID: 'Invalid member id',
+  INVALID_SEAT_ID: 'Invalid seat id',
+  INVALID_SEAT_REFERENCE: 'Member has an invalid seat reference. Assign a seat again',
   FORBIDDEN: 'Access forbidden',
 
   // Auth
@@ -61,6 +64,9 @@ export const MESSAGES = {
   MEMBER_FETCHED: 'Member fetched successfully',
   MEMBER_RENEWED: 'Member membership renewed successfully',
   MEMBER_RENEW_NOT_ALLOWED: 'Demo members cannot renew a membership plan',
+  MEMBER_CONVERTED_TO_PERMANENT: 'Demo member converted to permanent successfully',
+  MEMBER_CONVERT_NOT_DEMO: 'Only demo members can be converted to permanent',
+  END_DATE_AFTER_START: 'endDate must be after member startDate',
   DISCOUNT_EXCEEDS_FEE: 'Discount cannot be greater than fee per month',
   INVALID_MEMBERSHIP_PLAN:
     'Invalid membership plan. Use: 1_month, 2_months, 3_months, 6_months, or 1_year',
