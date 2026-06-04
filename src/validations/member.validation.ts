@@ -17,6 +17,7 @@ const membershipPlanSchema = Joi.string().custom((value, helpers) => {
   return plan;
 }, 'membership plan');
 
+// Base fields shared by all member types
 const baseMemberFields = {
   fullName: Joi.string().required(),
   mobileNumber: Joi.string()
@@ -26,9 +27,15 @@ const baseMemberFields = {
     .valid(...Object.values(ShiftType))
     .required(),
   startDate: Joi.date().iso().required(),
-  endDate: Joi.date().iso().greater(Joi.ref('startDate')).required(),
+  // endDate is required for permanent/without-seat, optional for demo
+  endDate: Joi.when('type', {
+    is: 'demo',
+    then: Joi.date().iso().optional().allow(null),
+    otherwise: Joi.date().iso().greater(Joi.ref('startDate')).required(),
+  }),
   courseName: Joi.string().optional(),
-  email: Joi.string().email().optional(),
+  // email is optional for all member types
+  email: Joi.string().email().optional().allow('', null),
   remarks: Joi.string().optional(),
 };
 
@@ -90,7 +97,8 @@ export const memberValidation = {
     startDate: Joi.date().iso().optional(),
     endDate: Joi.date().iso().optional(),
     courseName: Joi.string().optional(),
-    email: Joi.string().email().optional(),
+    // email is optional — allow empty string or null
+    email: Joi.string().email().optional().allow('', null),
     remarks: Joi.string().optional(),
     membershipPlan: membershipPlanSchema.optional(),
     feePerMonth: Joi.number().positive().optional(),
@@ -118,7 +126,7 @@ export const memberValidation = {
   changeSeat: Joi.object({
     seatId: Joi.string().hex().length(24).required(),
     shiftType: Joi.string()
-      .valid(...Object.values(ShiftType))
+      .valid(...Object.values(ShiftType), 'fullDay')
       .optional(),
   }),
 

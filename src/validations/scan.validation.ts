@@ -18,7 +18,7 @@ export const scanValidation = {
       .valid(...Object.values(ShiftType))
       .required(),
     startDate: Joi.date().iso().required(),
-    endDate: Joi.date().iso().greater(Joi.ref('startDate')).required(),
+    endDate: Joi.date().iso().greater(Joi.ref('startDate')).optional(),
     courseName: Joi.string().optional().allow(''),
     email: Joi.string().email().optional().allow(''),
     remarks: Joi.string().optional().allow(''),

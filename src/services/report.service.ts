@@ -39,7 +39,7 @@ const mapMemberToRow = (member: IMemberDocument): (string | number)[] => {
     member.shiftType,
     member.membershipPlan ?? '-',
     formatDate(member.startDate),
-    formatDate(member.endDate),
+    member.endDate ? formatDate(member.endDate) : '-',
     seat?.seatNumber ?? '-',
     member.totalFee ?? 0,
     member.amountPaid,

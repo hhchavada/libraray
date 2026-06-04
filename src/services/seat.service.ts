@@ -3,7 +3,7 @@ import { Seat, ISeatDocument } from '../models/seat.model';
 import { Member } from '../models/member.model';
 import { ApiError } from '../utils/ApiError';
 import { MESSAGES } from '../constants/messages';
-import { SeatStatus, ShiftType, MemberStatus } from '../constants/enums';
+import { SeatStatus, ShiftType, MemberStatus, MemberType } from '../constants/enums';
 import {
   defaultPlacementForSeat,
   placementToGridFields,
@@ -191,20 +191,43 @@ export const seatService = {
     return seat;
   },
 
-  async releaseSeat(seatId: string): Promise<ISeatDocument> {
+  async releaseSeat(seatId: string, memberId?: string, libraryId?: string): Promise<ISeatDocument> {
     const seat = await this.getSeatById(seatId);
 
+    if (libraryId && seat.library.toString() !== libraryId) {
+      throw new ApiError(400, MESSAGES.SEAT_LIBRARY_MISMATCH);
+    }
+
+    const membersToRelease = await Member.find(
+      memberId ? { _id: memberId, seat: seatId } : { seat: seatId, status: MemberStatus.ACTIVE }
+    );
+
+    if (memberId && membersToRelease.length === 0) {
+      throw new ApiError(404, MESSAGES.MEMBER_HAS_NO_SEAT); // Or specific message
+    }
+
+    for (const member of membersToRelease) {
+      member.seat = undefined;
+      if (member.memberType === MemberType.PERMANENT) {
+        member.memberType = MemberType.WITHOUT_SEAT;
+      }
+      await member.save();
+    }
+
+    // Re-query remaining active members still linked to this seat
     const remainingMembers = await Member.find({
       seat: seatId,
       status: MemberStatus.ACTIVE,
     }).sort({ createdAt: 1 });
 
     if (remainingMembers.length === 0) {
+      // No members left — mark seat as available
       seat.status = SeatStatus.AVAILABLE;
       seat.assignedTo = null;
       seat.shiftType = null;
       seat.lockedAt = null;
     } else {
+      // Promote the earliest remaining member as the primary assignee
       const primary = remainingMembers[0];
       seat.assignedTo = primary._id;
       seat.shiftType = primary.shiftType;

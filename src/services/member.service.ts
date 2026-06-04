@@ -57,7 +57,8 @@ export interface CreateDemoMemberData {
   memberType: MemberType;
   shiftType: ShiftType;
   startDate: Date;
-  endDate: Date;
+  // endDate is optional for demo members
+  endDate?: Date;
   remarks?: string;
 }
 
@@ -71,7 +72,8 @@ export interface CreateMemberData {
   courseName?: string;
   shiftType: ShiftType;
   startDate: Date;
-  endDate: Date;
+  // endDate is optional for demo members
+  endDate?: Date;
   remarks?: string;
   membershipPlan?: MembershipPlan;
   feePerMonth?: number;
@@ -175,7 +177,7 @@ export const memberService = {
             membershipPlan: membershipPlan!,
             shiftType: data.shiftType,
             startDate: data.startDate,
-            endDate: data.endDate,
+            endDate: data.endDate!,
             feePerMonth: data.feePerMonth!,
             discount: data.discount,
             paymentStatus: data.paymentStatus!,
@@ -212,7 +214,7 @@ export const memberService = {
             membershipPlan: membershipPlan!,
             shiftType: data.shiftType,
             startDate: data.startDate,
-            endDate: data.endDate,
+            endDate: data.endDate!,
             feePerMonth: data.feePerMonth!,
             discount: data.discount,
             paymentStatus: data.paymentStatus!,
@@ -445,7 +447,11 @@ export const memberService = {
       throw new ApiError(400, MESSAGES.MEMBER_HAS_NO_SEAT);
     }
 
-    if (member.seat.toString() === newSeatId) {
+    const currentSeatId = typeof member.seat === 'object' && (member.seat as any)._id
+      ? (member.seat as any)._id.toString()
+      : member.seat!.toString();
+
+    if (currentSeatId === newSeatId) {
       throw new ApiError(400, MESSAGES.SAME_SEAT_SELECTED);
     }
 
@@ -455,9 +461,13 @@ export const memberService = {
     }
 
     const shift = shiftType ?? member.shiftType;
-    const oldSeatId = member.seat.toString();
+    // member.seat is populated (full document), so extract _id properly
+    const oldSeatId = typeof member.seat === 'object' && (member.seat as any)._id
+      ? (member.seat as any)._id.toString()
+      : member.seat!.toString();
 
-    await seatService.releaseSeat(oldSeatId);
+    // Release only this member's link to the old seat (preserves other members on shared seats)
+    await seatService.releaseSeat(oldSeatId, member._id.toString());
     await seatService.assignSeat(newSeatId, member._id.toString(), shift);
 
     member.seat = new mongoose.Types.ObjectId(newSeatId);
@@ -504,7 +514,7 @@ export const memberService = {
     const planMonths = resolvePlanMonths(membershipPlan);
 
     const now = new Date();
-    const previousEndDate = new Date(member.endDate);
+    const previousEndDate = new Date(member.endDate ?? new Date());
     const renewalStart = previousEndDate > now ? previousEndDate : now;
     const newEndDate = addMonths(renewalStart, planMonths);
 

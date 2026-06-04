@@ -20,7 +20,7 @@ export interface IMember {
   membershipPlan?: MembershipPlan;
   shiftType: ShiftType;
   startDate: Date;
-  endDate: Date;
+  endDate?: Date;
   feePerMonth?: number;
   discount: number;
   feesAfterDiscount?: number;
@@ -88,7 +88,7 @@ const memberSchema = new Schema<IMemberDocument>(
     },
     endDate: {
       type: Date,
-      required: true,
+      // Not required — demo members may not have an end date
     },
     feePerMonth: {
       type: Number,
