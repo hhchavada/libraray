@@ -294,7 +294,7 @@ export const memberService = {
   async createDemoMember(data: CreateDemoMemberData, libraryId: string): Promise<IMemberDocument> {
     const memberId = await this.generateMemberId(libraryId);
 
-    return Member.create({
+    const payload: Record<string, unknown> = {
       library: libraryId,
       memberId,
       fullName: data.fullName,
@@ -304,9 +304,14 @@ export const memberService = {
       memberType: MemberType.DEMO,
       shiftType: data.shiftType,
       startDate: data.startDate,
-      endDate: data.endDate,
       remarks: data.remarks,
-    });
+    };
+
+    if (data.endDate) {
+      payload.endDate = data.endDate;
+    }
+
+    return Member.create(payload);
   },
 
   async createMemberWithoutSeat(

@@ -56,10 +56,15 @@ const baseMemberFields = {
     .valid(...Object.values(ShiftType))
     .required(),
   startDate: Joi.date().iso().required(),
-  // endDate is required for permanent/without-seat, optional for demo
+  // endDate is required for permanent/without-seat; optional for demo (omit or null)
   endDate: Joi.when('type', {
     is: 'demo',
-    then: Joi.date().iso().optional().allow(null),
+    then: Joi.date()
+      .iso()
+      .greater(Joi.ref('startDate'))
+      .optional()
+      .allow(null)
+      .empty(['', null]),
     otherwise: Joi.date().iso().greater(Joi.ref('startDate')).required(),
   }),
   courseName: Joi.string().optional(),

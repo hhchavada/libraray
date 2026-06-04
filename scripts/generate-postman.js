@@ -372,13 +372,13 @@ const collection = {
           event: [memberScript],
         }),
         req('Create Member (Demo)', 'POST', `${api}/members`, {
+          desc: 'endDate is optional for demo — omit it or send null.',
           body: {
             type: 'demo',
             fullName: 'Demo Student',
             mobileNumber: '9988776655',
             shiftType: 'evening',
             startDate: '2025-05-01T00:00:00.000Z',
-            endDate: '2025-05-07T00:00:00.000Z',
           },
           event: [memberScript],
         }),
