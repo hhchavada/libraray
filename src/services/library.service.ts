@@ -155,6 +155,7 @@ export const libraryService = {
     const libraryObj = library.toJSON();
 
     return {
+      _id: library._id.toString(),
       libraryId: library._id.toString(),
       ownerId: library.owner.toString(),
       libraryName: libraryObj.libraryName,

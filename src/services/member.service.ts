@@ -707,7 +707,7 @@ export const memberService = {
     await Member.findByIdAndDelete(memberId);
 
     if (seatId) {
-      await seatService.releaseSeat(seatId);
+      await seatService.syncSeatFromMembers(seatId);
     }
   },
 

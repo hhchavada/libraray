@@ -215,9 +215,12 @@ export const seatService = {
       throw new ApiError(400, MESSAGES.SEAT_LIBRARY_MISMATCH);
     }
 
-    const membersToRelease = await Member.find(
-      memberId ? { _id: memberId, seat: seatId } : { seat: seatId, status: MemberStatus.ACTIVE }
-    );
+    const query: any = { seat: seatId, status: MemberStatus.ACTIVE };
+    if (memberId) {
+      query._id = memberId;
+    }
+
+    const membersToRelease = await Member.find(query);
 
     if (memberId && membersToRelease.length === 0) {
       throw new ApiError(404, MESSAGES.MEMBER_HAS_NO_SEAT); // Or specific message
