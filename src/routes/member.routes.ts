@@ -10,6 +10,7 @@ router.use(protect);
 
 router.post('/', validate(memberValidation.createMember), memberController.createMember);
 router.get('/', memberController.getAllMembers);
+router.get('/expiring-soon', memberController.getExpiringSoon);
 router.post(
   '/:id/assign-seat',
   validate(memberIdParam, 'params'),

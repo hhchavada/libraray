@@ -146,6 +146,32 @@ export const libraryService = {
     return library;
   },
 
+  /**
+   * Returns library data with short, app-friendly `libraryId` and `ownerId`
+   * at the top level for easy consumption by the mobile/web app.
+   */
+  async getLibraryForApp(ownerId: string) {
+    const library = await this.getLibraryByOwner(ownerId);
+    const libraryObj = library.toJSON();
+
+    return {
+      libraryId: library._id.toString(),
+      ownerId: library.owner.toString(),
+      libraryName: libraryObj.libraryName,
+      address: libraryObj.address,
+      totalSeats: libraryObj.totalSeats,
+      hasCustomSeatMap: libraryObj.hasCustomSeatMap,
+      seatMapColumns: libraryObj.seatMapColumns,
+      seatMapRows: libraryObj.seatMapRows,
+      isActive: libraryObj.isActive,
+      qrCodeId: libraryObj.qrCodeId,
+      qrCodePayload: libraryObj.qrCodePayload,
+      qrCodeImage: libraryObj.qrCodeImage,
+      createdAt: libraryObj.createdAt,
+      updatedAt: libraryObj.updatedAt,
+    };
+  },
+
   async getLibraryById(libraryId: string): Promise<ILibraryDocument> {
     if (!mongoose.Types.ObjectId.isValid(libraryId)) {
       throw new ApiError(400, MESSAGES.VALIDATION_ERROR);

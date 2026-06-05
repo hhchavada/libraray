@@ -104,4 +104,12 @@ export const memberController = {
     await memberService.deleteMember(req.params.id);
     res.status(200).json(new ApiResponse(200, MESSAGES.MEMBER_DELETED, null));
   }),
+
+  getExpiringSoon: asyncHandler(async (req: Request, res: Response) => {
+    const libraryId = await getOwnerLibraryId(getAuthUserId(req));
+    const result = await memberService.getExpiringSoonMembers(libraryId);
+    res
+      .status(200)
+      .json(new ApiResponse(200, MESSAGES.MEMBERS_EXPIRING_SOON_FETCHED, result));
+  }),
 };

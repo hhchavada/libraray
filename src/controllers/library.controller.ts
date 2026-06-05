@@ -12,7 +12,7 @@ export const libraryController = {
   }),
 
   getMyLibrary: asyncHandler(async (req: Request, res: Response) => {
-    const library = await libraryService.getLibraryByOwner(getAuthUserId(req));
+    const library = await libraryService.getLibraryForApp(getAuthUserId(req));
     res.status(200).json(new ApiResponse(200, MESSAGES.LIBRARY_FETCHED, library));
   }),
 

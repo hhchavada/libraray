@@ -765,4 +765,45 @@ export const memberService = {
 
     return result.modifiedCount;
   },
+
+  /**
+   * Returns active members whose membership plan is expiring
+   * within the next 1–5 days (including today).
+   */
+  async getExpiringSoonMembers(libraryId: string): Promise<{
+    members: Array<Record<string, unknown> & { daysRemaining: number }>;
+    totalCount: number;
+  }> {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+
+    const fiveDaysLater = new Date(today);
+    fiveDaysLater.setDate(fiveDaysLater.getDate() + 5);
+    fiveDaysLater.setHours(23, 59, 59, 999);
+
+    const members = await Member.find({
+      library: libraryId,
+      status: MemberStatus.ACTIVE,
+      endDate: { $gte: today, $lte: fiveDaysLater },
+    })
+      .populate('seat')
+      .sort({ endDate: 1 });
+
+    const now = new Date();
+    const membersWithDays = members.map((m) => {
+      const memberObj = m.toJSON();
+      const endDate = new Date(m.endDate as Date);
+      const diffMs = endDate.getTime() - now.getTime();
+      const daysRemaining = Math.max(0, Math.ceil(diffMs / (1000 * 60 * 60 * 24)));
+      return {
+        ...memberObj,
+        daysRemaining,
+      };
+    });
+
+    return {
+      members: membersWithDays,
+      totalCount: membersWithDays.length,
+    };
+  },
 };

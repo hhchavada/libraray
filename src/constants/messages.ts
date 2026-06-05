@@ -71,6 +71,7 @@ export const MESSAGES = {
   INVALID_MEMBERSHIP_PLAN:
     'Invalid membership plan. Use: 1_month, 2_months, 3_months, 6_months, or 1_year',
   EXPIRED_MEMBERS_UPDATED: 'Expired members updated successfully',
+  MEMBERS_EXPIRING_SOON_FETCHED: 'Expiring soon members fetched successfully',
   MEMBER_MARKED_AS_PAID: 'Payment recorded and due amount updated successfully',
   MEMBER_NO_DUE: 'Member has no due amount to pay',
   MEMBER_PAYMENT_EXCEEDS_DUE: 'Payment amount exceeds due amount',
