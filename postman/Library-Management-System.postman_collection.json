@@ -840,10 +840,10 @@
               }
             ],
             "url": "{{baseUrl}}/api/v1/members/{{memberId}}/convert-to-permanent",
-            "description": "Converts a demo member to permanent with plan, fees, endDate, and optional seatId.",
+            "description": "Converts a demo member to permanent with plan, fees, endDate, and optional seatId, shiftType, and startDate.",
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"membershipPlan\": \"1_month\",\n  \"feePerMonth\": 2000,\n  \"discount\": 0,\n  \"endDate\": \"2025-06-01T00:00:00.000Z\",\n  \"amountPaid\": 2000,\n  \"paymentMode\": \"upi\",\n  \"seatId\": \"{{seatId}}\"\n}"
+              "raw": "{\n  \"membershipPlan\": \"1_month\",\n  \"feePerMonth\": 2000,\n  \"discount\": 0,\n  \"endDate\": \"2025-06-01T00:00:00.000Z\",\n  \"amountPaid\": 2000,\n  \"paymentMode\": \"upi\",\n  \"seatId\": \"{{seatId}}\",\n  \"shiftType\": \"morning\",\n  \"startDate\": \"2025-05-01T00:00:00.000Z\"\n}"
             }
           },
           "event": [

@@ -198,6 +198,8 @@ export const memberValidation = {
       'string.hex': MESSAGES.INVALID_SEAT_ID,
       'string.length': MESSAGES.INVALID_SEAT_ID,
     }),
+    shiftType: Joi.string().custom(normalizeShiftType, 'shift type').optional(),
+    startDate: Joi.date().iso().optional(),
     remarks: optionalRemarks,
   }),
 };

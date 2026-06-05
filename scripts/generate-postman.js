@@ -403,7 +403,7 @@ const collection = {
           body: { fullName: 'Rahul Updated', email: 'rahul@example.com' },
         }),
         req('Convert Demo to Permanent', 'POST', `${api}/members/{{memberId}}/convert-to-permanent`, {
-          desc: 'Converts a demo member to permanent with plan, fees, endDate, and optional seatId.',
+          desc: 'Converts a demo member to permanent with plan, fees, endDate, and optional seatId, shiftType, and startDate.',
           body: {
             membershipPlan: '1_month',
             feePerMonth: 2000,
@@ -412,6 +412,8 @@ const collection = {
             amountPaid: 2000,
             paymentMode: 'upi',
             seatId: '{{seatId}}',
+            shiftType: 'morning',
+            startDate: '2025-05-01T00:00:00.000Z',
           },
           event: [memberScript],
         }),

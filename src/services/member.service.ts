@@ -102,6 +102,8 @@ export interface ConvertDemoToPermanentData {
   paymentMode: PaymentMode;
   seatId?: string;
   remarks?: string;
+  shiftType?: ShiftType;
+  startDate?: Date;
 }
 
 const resolvePlanMonths = (plan: MembershipPlan | string): number => {
@@ -529,7 +531,7 @@ export const memberService = {
     }
 
     const endDate = new Date(data.endDate);
-    const startDate = new Date(member.startDate);
+    const startDate = data.startDate ? new Date(data.startDate) : new Date(member.startDate);
     if (endDate <= startDate) {
       throw new ApiError(400, MESSAGES.END_DATE_AFTER_START);
     }
@@ -551,8 +553,15 @@ export const memberService = {
     member.dueAmount = dueAmount;
     member.paymentStatus = paymentStatus;
     member.paymentMode = data.paymentMode;
+    if (data.startDate) {
+      member.startDate = startDate;
+    }
     member.endDate = endDate;
     member.status = MemberStatus.ACTIVE;
+
+    if (data.shiftType) {
+      member.shiftType = data.shiftType;
+    }
 
     if (data.remarks !== undefined) {
       member.remarks = remarksForDb(data.remarks);
