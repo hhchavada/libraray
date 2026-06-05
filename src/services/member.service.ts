@@ -701,7 +701,7 @@ export const memberService = {
   },
 
   async deleteMember(memberId: string): Promise<void> {
-    const member = await this.getMemberById(memberId);
+    const member = await this.getMemberById(memberId, { populateSeat: false });
     const seatId = member.seat?.toString();
 
     await Member.findByIdAndDelete(memberId);
@@ -709,6 +709,45 @@ export const memberService = {
     if (seatId) {
       await seatService.releaseSeat(seatId);
     }
+  },
+
+
+  async markAsPaid(
+    memberId: string,
+    libraryId: string,
+    data: { amountPaid: number; paymentMode: PaymentMode; remarks?: string }
+  ): Promise<IMemberDocument> {
+    const member = await this.getMemberById(memberId);
+
+    if (member.library.toString() !== libraryId) {
+      throw new ApiError(404, MESSAGES.MEMBER_NOT_FOUND);
+    }
+
+    if (member.memberType === MemberType.DEMO) {
+      throw new ApiError(400, MESSAGES.VALIDATION_ERROR);
+    }
+
+    const currentDue = member.dueAmount ?? 0;
+
+    if (currentDue <= 0) {
+      throw new ApiError(400, MESSAGES.MEMBER_NO_DUE);
+    }
+
+    if (data.amountPaid > currentDue) {
+      throw new ApiError(400, MESSAGES.MEMBER_PAYMENT_EXCEEDS_DUE);
+    }
+
+    member.amountPaid = (member.amountPaid ?? 0) + data.amountPaid;
+    member.dueAmount = Math.max(0, currentDue - data.amountPaid);
+    member.paymentStatus = resolvePaymentStatus(member.amountPaid, member.dueAmount);
+    member.paymentMode = data.paymentMode;
+
+    if (data.remarks !== undefined) {
+      member.remarks = remarksForDb(data.remarks);
+    }
+
+    await member.save();
+    return member.populate('seat');
   },
 
   async getExpiredMembers(libraryId: string): Promise<number> {

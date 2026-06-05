@@ -202,4 +202,12 @@ export const memberValidation = {
     startDate: Joi.date().iso().optional(),
     remarks: optionalRemarks,
   }),
+
+  markAsPaid: Joi.object({
+    amountPaid: Joi.number().positive().required(),
+    paymentMode: Joi.string()
+      .valid(...Object.values(PaymentMode))
+      .required(),
+    remarks: optionalRemarks,
+  }),
 };

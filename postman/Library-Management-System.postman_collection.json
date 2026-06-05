@@ -898,6 +898,24 @@
           ]
         },
         {
+          "name": "Mark As Paid (Collect Due)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/api/v1/members/{{memberId}}/mark-as-paid",
+            "description": "Collect remaining due payment from a member. amountPaid must be <= current dueAmount.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"amountPaid\": 500,\n  \"paymentMode\": \"cash\",\n  \"remarks\": \"Remaining fee collected\"\n}"
+            }
+          }
+        },
+        {
           "name": "Assign Seat (without_seat member)",
           "request": {
             "method": "POST",

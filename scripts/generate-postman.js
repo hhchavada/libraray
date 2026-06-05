@@ -426,6 +426,14 @@ const collection = {
           },
           event: [memberScript],
         }),
+        req('Mark As Paid (Collect Due)', 'POST', `${api}/members/{{memberId}}/mark-as-paid`, {
+          desc: 'Collect remaining due payment from a member. amountPaid must be <= current dueAmount.',
+          body: {
+            amountPaid: 500,
+            paymentMode: 'cash',
+            remarks: 'Remaining fee collected',
+          },
+        }),
         req('Assign Seat (without_seat member)', 'POST', `${api}/members/{{memberId}}/assign-seat`, {
           body: { seatId: '{{seatId}}', shiftType: 'morning' },
         }),

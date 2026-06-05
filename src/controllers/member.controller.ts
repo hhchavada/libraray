@@ -94,6 +94,12 @@ export const memberController = {
     res.status(200).json(new ApiResponse(200, MESSAGES.MEMBER_RENEWED, member.toJSON()));
   }),
 
+  markAsPaid: asyncHandler(async (req: Request, res: Response) => {
+    const libraryId = await getOwnerLibraryId(getAuthUserId(req));
+    const member = await memberService.markAsPaid(req.params.id, libraryId, req.body);
+    res.status(200).json(new ApiResponse(200, MESSAGES.MEMBER_MARKED_AS_PAID, member.toJSON()));
+  }),
+
   deleteMember: asyncHandler(async (req: Request, res: Response) => {
     await memberService.deleteMember(req.params.id);
     res.status(200).json(new ApiResponse(200, MESSAGES.MEMBER_DELETED, null));

@@ -35,6 +35,12 @@ router.post(
   validate(memberValidation.renewMember),
   memberController.renewMember
 );
+router.post(
+  '/:id/mark-as-paid',
+  validate(memberIdParam, 'params'),
+  validate(memberValidation.markAsPaid),
+  memberController.markAsPaid
+);
 router.get('/:id', memberController.getMemberById);
 router.put('/:id', validate(memberValidation.updateMember), memberController.updateMember);
 router.delete('/:id', memberController.deleteMember);
