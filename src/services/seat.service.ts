@@ -62,12 +62,13 @@ const attachSeatBookings = async (seats: ISeatDocument[]) => {
     status: MemberStatus.ACTIVE,
   }).select('seat shiftType fullName memberId');
 
-  const bySeat = new Map<string, Array<{ memberId: string; fullName: string; shiftType: ShiftType }>>();
+  const bySeat = new Map<string, Array<{ _id: string; memberId: string; fullName: string; shiftType: ShiftType }>>();
 
   for (const member of members) {
     const seatKey = member.seat!.toString();
     const list = bySeat.get(seatKey) ?? [];
     list.push({
+      _id: member._id.toString(),
       memberId: member.memberId,
       fullName: member.fullName,
       shiftType: member.shiftType,
@@ -78,7 +79,7 @@ const attachSeatBookings = async (seats: ISeatDocument[]) => {
   return seats.map((seat) => {
     const bookings = bySeat.get(seat._id.toString()) ?? [];
     const seatObj = seat.toObject() as ISeatDocument & {
-      bookings: Array<{ memberId: string; fullName: string; shiftType: ShiftType }>;
+      bookings: Array<{ _id: string; memberId: string; fullName: string; shiftType: ShiftType }>;
       bookedShifts: ShiftType[];
     };
     seatObj.bookings = bookings;

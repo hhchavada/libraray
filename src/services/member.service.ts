@@ -433,7 +433,7 @@ export const memberService = {
     seatId: string,
     shiftType?: ShiftType
   ): Promise<IMemberDocument> {
-    const member = await this.getMemberById(memberId);
+    const member = await this.getMemberById(memberId, { populateSeat: false });
 
     if (member.library.toString() !== libraryId) {
       throw new ApiError(404, MESSAGES.MEMBER_NOT_FOUND);
@@ -464,7 +464,7 @@ export const memberService = {
 
     await member.save();
     await seatService.syncSeatFromMembers(seatId);
-    return member.populate('seat');
+    return this.getMemberById(memberId);
   },
 
   async changeMemberSeat(
