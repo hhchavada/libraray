@@ -32,12 +32,15 @@ export const errorHandler = (
 
   // Mongoose duplicate key error (code 11000)
   if ((err as any).code === 11000) {
-    const field = Object.keys((err as any).keyPattern)[0];
+    const keyPattern: Record<string, unknown> = (err as any).keyPattern || {};
+    const fields = Object.keys(keyPattern);
     let message: string = MESSAGES.VALIDATION_ERROR;
-    if (field === 'email') {
+    if (fields.includes('email')) {
       message = MESSAGES.DUPLICATE_EMAIL;
-    } else if (field === 'mobileNumber') {
+    } else if (fields.includes('mobileNumber')) {
       message = MESSAGES.DUPLICATE_MOBILE;
+    } else if (fields.includes('memberId')) {
+      message = 'Member ID conflict, please retry.';
     }
     error = new ApiError(409, message);
   }

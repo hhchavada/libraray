@@ -248,8 +248,15 @@ export const memberService = {
   },
 
   async generateMemberId(libraryId: string): Promise<string> {
-    const count = await Member.countDocuments({ library: libraryId });
-    const paddedNumber = String(count + 1).padStart(4, '0');
+    const lastMember = await Member.findOne({ library: libraryId })
+      .sort({ memberId: -1 })
+      .select('memberId');
+
+    const lastNumber = lastMember?.memberId
+      ? parseInt(lastMember.memberId.replace('LIB-', ''), 10)
+      : 0;
+
+    const paddedNumber = String(lastNumber + 1).padStart(4, '0');
     return `LIB-${paddedNumber}`;
   },
 
