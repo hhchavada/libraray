@@ -507,10 +507,14 @@ export const memberService = {
 
     await seatService.assignSeat(newSeatId, member._id.toString(), shiftType);
 
-    member.seat = new mongoose.Types.ObjectId(newSeatId);
-    member.shiftType = shiftType;
-    member.memberType = MemberType.PERMANENT;
-    await member.save();
+    // Re-fetch after releaseSeat — it changes memberType to WITHOUT_SEAT in DB.
+    // Without re-fetch, Mongoose's in-memory doc still thinks memberType is "permanent"
+    // and won't include it in $set, leaving DB with stale "without_seat".
+    const freshMember = await this.getMemberById(memberId, { populateSeat: false });
+    freshMember.seat = new mongoose.Types.ObjectId(newSeatId);
+    freshMember.shiftType = shiftType;
+    freshMember.memberType = MemberType.PERMANENT;
+    await freshMember.save();
     await seatService.syncSeatFromMembers(newSeatId);
 
     return this.getMemberById(memberId);
