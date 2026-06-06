@@ -228,7 +228,7 @@ export const seatService = {
     }
 
     for (const member of membersToRelease) {
-      member.seat = undefined;
+      member.seat = null;
       if (member.memberType === MemberType.PERMANENT) {
         member.memberType = MemberType.WITHOUT_SEAT;
       }

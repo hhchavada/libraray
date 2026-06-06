@@ -384,6 +384,9 @@ export const memberService = {
     }
     if (filters.memberType) {
       query.memberType = filters.memberType;
+      if (filters.memberType === MemberType.WITHOUT_SEAT && filters.hasSeat === undefined) {
+        query.$or = [{ seat: { $exists: false } }, { seat: null }];
+      }
     }
     if (filters.paymentStatus) {
       query.paymentStatus = filters.paymentStatus;
@@ -486,13 +489,10 @@ export const memberService = {
       throw new ApiError(404, MESSAGES.MEMBER_NOT_FOUND);
     }
 
-    if (!member.seat) {
-      throw new ApiError(400, MESSAGES.MEMBER_HAS_NO_SEAT);
-    }
+    const isWithoutSeat = !member.seat;
+    const oldSeatId = isWithoutSeat ? null : member.seat!.toString();
 
-    const oldSeatId = member.seat.toString();
-
-    if (oldSeatId === newSeatId) {
+    if (!isWithoutSeat && oldSeatId === newSeatId) {
       throw new ApiError(400, MESSAGES.SAME_SEAT_SELECTED);
     }
 
@@ -501,20 +501,19 @@ export const memberService = {
       throw new ApiError(400, MESSAGES.SEAT_LIBRARY_MISMATCH);
     }
 
-    const memberTypeBefore = member.memberType;
+    if (!isWithoutSeat) {
+      await seatService.releaseSeat(oldSeatId!, member._id.toString());
+    }
 
-    await seatService.releaseSeat(oldSeatId, member._id.toString());
     await seatService.assignSeat(newSeatId, member._id.toString(), shiftType);
 
     member.seat = new mongoose.Types.ObjectId(newSeatId);
     member.shiftType = shiftType;
-    if (memberTypeBefore === MemberType.PERMANENT) {
-      member.memberType = MemberType.PERMANENT;
-    }
+    member.memberType = MemberType.PERMANENT;
     await member.save();
     await seatService.syncSeatFromMembers(newSeatId);
 
-    return member.populate('seat');
+    return this.getMemberById(memberId);
   },
 
   async convertDemoToPermanent(
