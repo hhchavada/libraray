@@ -149,6 +149,22 @@ export enum RevenueDateFilter {
   TODAY = 'today',
   THIS_WEEK = 'this_week',
   THIS_MONTH = 'this_month',
+  LAST_MONTH = 'last_month',
+}
+
+export enum AdminDateFilter {
+  TODAY = 'today',
+  THIS_WEEK = 'this_week',
+  THIS_MONTH = 'this_month',
+  THIS_YEAR = 'this_year',
+  CUSTOM_RANGE = 'custom_range',
+}
+
+export enum LibraryLifecycleStatus {
+  DEMO = 'demo',
+  ACTIVE = 'active',
+  GRACE_PERIOD = 'grace_period',
+  TERMINATED = 'terminated',
 }
 
 export enum OtpType {

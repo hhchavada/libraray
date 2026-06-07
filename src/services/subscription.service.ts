@@ -19,6 +19,7 @@ import {
 } from '../constants/subscriptionPlans.data';
 import { formatRazorpayContact, razorpayService } from './razorpay.service';
 import { addMonths } from '../utils/subscription.util';
+import { calculateGstBreakdown } from '../utils/gst.util';
 import { logger } from '../utils/logger';
 
 const LOG_TAG = 'Subscription';
@@ -122,12 +123,19 @@ export const subscriptionService = {
       );
     }
 
+    const gst = calculateGstBreakdown(subscription.amount);
+
     subscription.razorpayPaymentId = razorpayPaymentId;
     if (razorpaySignature) subscription.razorpaySignature = razorpaySignature;
     subscription.paymentStatus = SubscriptionPaymentStatus.PAID;
     subscription.status = LibrarySubscriptionStatus.ACTIVE;
     subscription.startDate = startDate;
     subscription.endDate = endDate;
+    subscription.taxableAmount = gst.taxableAmount;
+    subscription.gstAmount = gst.gstAmount;
+    subscription.razorpayFee = gst.razorpayFee;
+    subscription.razorpayGst = gst.razorpayGst;
+    subscription.netSettlementAmount = gst.netSettlementAmount;
     await subscription.save();
 
     logger.info(LOG_TAG, 'Subscription activated', {
@@ -450,7 +458,10 @@ export const subscriptionService = {
             seatsMin: seed.seatsMin,
             seatsMax: seed.seatsMax,
             durationMonths: seed.durationMonths,
+            baseAmount: seed.baseAmount,
             amount: seed.amount,
+            savingPercent: seed.savingPercent,
+            perMonthAmount: seed.perMonthAmount,
             currency: 'INR',
             isActive: true,
           },

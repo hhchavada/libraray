@@ -100,6 +100,13 @@ export const MESSAGES = {
   // Admin
   ADMIN_DASHBOARD_FETCHED: 'Admin dashboard data fetched successfully',
   ADMIN_LIBRARY_FETCHED: 'Library details fetched successfully',
+  ADMIN_ANALYTICS_FETCHED: 'Admin analytics fetched successfully',
+  ADMIN_TRANSACTIONS_FETCHED: 'Admin transactions fetched successfully',
+  ADMIN_EXPORT_GENERATED: 'Export generated successfully',
+  MEMBER_IMPORT_COMPLETED: 'Member import completed',
+  MEMBER_IMPORT_FILE_REQUIRED: 'Excel file is required',
+  EXECUTIVE_CREATED: 'Sales executive created successfully',
+  EXECUTIVES_FETCHED: 'Sales executives fetched successfully',
 
   // Revenue
   REVENUE_FETCHED: 'Revenue data fetched successfully',

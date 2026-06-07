@@ -8,7 +8,14 @@ export interface ISubscriptionPlan {
   seatsMax: number;
   durationType: PlanDurationType;
   durationMonths: number;
+  /** Original list price before discount */
+  baseAmount: number;
+  /** Discounted price charged to the library owner */
   amount: number;
+  /** Percentage saved vs base plan (e.g. 60.12) */
+  savingPercent: number;
+  /** Effective monthly cost under the discounted plan */
+  perMonthAmount: number;
   currency: string;
   isActive: boolean;
   createdAt: Date;
@@ -49,7 +56,23 @@ const subscriptionPlanSchema = new Schema<ISubscriptionPlanDocument>(
       required: true,
       min: 1,
     },
+    baseAmount: {
+      type: Number,
+      required: true,
+      min: 0,
+    },
     amount: {
+      type: Number,
+      required: true,
+      min: 0,
+    },
+    savingPercent: {
+      type: Number,
+      required: true,
+      min: 0,
+      max: 100,
+    },
+    perMonthAmount: {
       type: Number,
       required: true,
       min: 0,

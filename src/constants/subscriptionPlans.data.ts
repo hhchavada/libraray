@@ -7,7 +7,10 @@ export interface SubscriptionPlanSeed {
   seatsMax: number;
   durationType: PlanDurationType;
   durationMonths: number;
+  baseAmount: number;
   amount: number;
+  savingPercent: number;
+  perMonthAmount: number;
 }
 
 /** 16 library subscription plans (4 categories × 4 billing periods). */
@@ -20,7 +23,10 @@ export const SUBSCRIPTION_PLANS_SEED: SubscriptionPlanSeed[] = [
     seatsMax: 50,
     durationType: PlanDurationType.MONTHLY,
     durationMonths: 1,
+    baseAmount: 499,
     amount: 199,
+    savingPercent: 60.12,
+    perMonthAmount: 199,
   },
   {
     name: 'Small Library — Quarterly',
@@ -29,7 +35,10 @@ export const SUBSCRIPTION_PLANS_SEED: SubscriptionPlanSeed[] = [
     seatsMax: 50,
     durationType: PlanDurationType.QUARTERLY,
     durationMonths: 3,
+    baseAmount: 1497,
     amount: 499,
+    savingPercent: 66.67,
+    perMonthAmount: 166.33,
   },
   {
     name: 'Small Library — Half Yearly',
@@ -38,7 +47,10 @@ export const SUBSCRIPTION_PLANS_SEED: SubscriptionPlanSeed[] = [
     seatsMax: 50,
     durationType: PlanDurationType.HALF_YEARLY,
     durationMonths: 6,
+    baseAmount: 2994,
     amount: 899,
+    savingPercent: 69.97,
+    perMonthAmount: 149.83,
   },
   {
     name: 'Small Library — Annually',
@@ -47,7 +59,10 @@ export const SUBSCRIPTION_PLANS_SEED: SubscriptionPlanSeed[] = [
     seatsMax: 50,
     durationType: PlanDurationType.YEARLY,
     durationMonths: 12,
+    baseAmount: 5988,
     amount: 1699,
+    savingPercent: 71.63,
+    perMonthAmount: 141.58,
   },
   // Medium Library (51–100 seats)
   {
@@ -57,7 +72,10 @@ export const SUBSCRIPTION_PLANS_SEED: SubscriptionPlanSeed[] = [
     seatsMax: 100,
     durationType: PlanDurationType.MONTHLY,
     durationMonths: 1,
+    baseAmount: 649,
     amount: 259,
+    savingPercent: 60.09,
+    perMonthAmount: 259,
   },
   {
     name: 'Medium Library — Quarterly',
@@ -66,7 +84,10 @@ export const SUBSCRIPTION_PLANS_SEED: SubscriptionPlanSeed[] = [
     seatsMax: 100,
     durationType: PlanDurationType.QUARTERLY,
     durationMonths: 3,
+    baseAmount: 1947,
     amount: 649,
+    savingPercent: 66.67,
+    perMonthAmount: 216.33,
   },
   {
     name: 'Medium Library — Half Yearly',
@@ -75,7 +96,10 @@ export const SUBSCRIPTION_PLANS_SEED: SubscriptionPlanSeed[] = [
     seatsMax: 100,
     durationType: PlanDurationType.HALF_YEARLY,
     durationMonths: 6,
+    baseAmount: 3894,
     amount: 1199,
+    savingPercent: 69.21,
+    perMonthAmount: 199.83,
   },
   {
     name: 'Medium Library — Annually',
@@ -84,7 +108,10 @@ export const SUBSCRIPTION_PLANS_SEED: SubscriptionPlanSeed[] = [
     seatsMax: 100,
     durationType: PlanDurationType.YEARLY,
     durationMonths: 12,
+    baseAmount: 7788,
     amount: 2199,
+    savingPercent: 71.76,
+    perMonthAmount: 183.25,
   },
   // Large Library (101–150 seats)
   {
@@ -94,7 +121,10 @@ export const SUBSCRIPTION_PLANS_SEED: SubscriptionPlanSeed[] = [
     seatsMax: 150,
     durationType: PlanDurationType.MONTHLY,
     durationMonths: 1,
+    baseAmount: 899,
     amount: 349,
+    savingPercent: 61.18,
+    perMonthAmount: 349,
   },
   {
     name: 'Large Library — Quarterly',
@@ -103,7 +133,10 @@ export const SUBSCRIPTION_PLANS_SEED: SubscriptionPlanSeed[] = [
     seatsMax: 150,
     durationType: PlanDurationType.QUARTERLY,
     durationMonths: 3,
+    baseAmount: 2697,
     amount: 899,
+    savingPercent: 66.67,
+    perMonthAmount: 299.67,
   },
   {
     name: 'Large Library — Half Yearly',
@@ -112,7 +145,10 @@ export const SUBSCRIPTION_PLANS_SEED: SubscriptionPlanSeed[] = [
     seatsMax: 150,
     durationType: PlanDurationType.HALF_YEARLY,
     durationMonths: 6,
+    baseAmount: 5394,
     amount: 1599,
+    savingPercent: 70.36,
+    perMonthAmount: 266.5,
   },
   {
     name: 'Large Library — Annually',
@@ -121,7 +157,10 @@ export const SUBSCRIPTION_PLANS_SEED: SubscriptionPlanSeed[] = [
     seatsMax: 150,
     durationType: PlanDurationType.YEARLY,
     durationMonths: 12,
+    baseAmount: 10788,
     amount: 2999,
+    savingPercent: 72.2,
+    perMonthAmount: 249.92,
   },
   // Mega Library (more than 150 seats)
   {
@@ -131,7 +170,10 @@ export const SUBSCRIPTION_PLANS_SEED: SubscriptionPlanSeed[] = [
     seatsMax: 999999,
     durationType: PlanDurationType.MONTHLY,
     durationMonths: 1,
+    baseAmount: 1099,
     amount: 449,
+    savingPercent: 59.14,
+    perMonthAmount: 449,
   },
   {
     name: 'Mega Library — Quarterly',
@@ -140,7 +182,10 @@ export const SUBSCRIPTION_PLANS_SEED: SubscriptionPlanSeed[] = [
     seatsMax: 999999,
     durationType: PlanDurationType.QUARTERLY,
     durationMonths: 3,
+    baseAmount: 3297,
     amount: 1099,
+    savingPercent: 66.67,
+    perMonthAmount: 366.33,
   },
   {
     name: 'Mega Library — Half Yearly',
@@ -149,7 +194,10 @@ export const SUBSCRIPTION_PLANS_SEED: SubscriptionPlanSeed[] = [
     seatsMax: 999999,
     durationType: PlanDurationType.HALF_YEARLY,
     durationMonths: 6,
+    baseAmount: 6594,
     amount: 1999,
+    savingPercent: 69.68,
+    perMonthAmount: 333.17,
   },
   {
     name: 'Mega Library — Annually',
@@ -158,13 +206,16 @@ export const SUBSCRIPTION_PLANS_SEED: SubscriptionPlanSeed[] = [
     seatsMax: 999999,
     durationType: PlanDurationType.YEARLY,
     durationMonths: 12,
+    baseAmount: 13188,
     amount: 3599,
+    savingPercent: 72.71,
+    perMonthAmount: 299.92,
   },
 ];
 
 export const PLAN_CATEGORY_LABELS: Record<PlanCategory, string> = {
-  [PlanCategory.SMALL]: 'Small',
-  [PlanCategory.MEDIUM]: 'Medium',
-  [PlanCategory.LARGE]: 'Large',
-  [PlanCategory.MEGA]: 'Mega',
+  [PlanCategory.SMALL]: 'Small Library (Up to 50 Seats)',
+  [PlanCategory.MEDIUM]: 'Medium Library (51–100 Seats)',
+  [PlanCategory.LARGE]: 'Large Library (101–150 Seats)',
+  [PlanCategory.MEGA]: 'Mega Library (151+ Seats)',
 };

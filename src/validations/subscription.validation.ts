@@ -29,7 +29,10 @@ export const subscriptionValidation = {
       .valid(...Object.values(PlanDurationType))
       .required(),
     durationMonths: Joi.number().integer().min(1).max(24).required(),
+    baseAmount: Joi.number().positive().required(),
     amount: Joi.number().positive().required(),
+    savingPercent: Joi.number().min(0).max(100).required(),
+    perMonthAmount: Joi.number().positive().required(),
     currency: Joi.string().length(3).uppercase().optional().default('INR'),
     isActive: Joi.boolean().optional().default(true),
   }),
@@ -45,7 +48,10 @@ export const subscriptionValidation = {
       .valid(...Object.values(PlanDurationType))
       .optional(),
     durationMonths: Joi.number().integer().min(1).max(24).optional(),
+    baseAmount: Joi.number().positive().optional(),
     amount: Joi.number().positive().optional(),
+    savingPercent: Joi.number().min(0).max(100).optional(),
+    perMonthAmount: Joi.number().positive().optional(),
     currency: Joi.string().length(3).uppercase().optional(),
     isActive: Joi.boolean().optional(),
   }).min(1),

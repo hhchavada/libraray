@@ -9,6 +9,11 @@ export interface ISubscription {
   razorpayPaymentId?: string;
   razorpaySignature?: string;
   amount: number;
+  taxableAmount?: number;
+  gstAmount?: number;
+  razorpayFee?: number;
+  razorpayGst?: number;
+  netSettlementAmount?: number;
   startDate?: Date;
   endDate?: Date;
   status: LibrarySubscriptionStatus;
@@ -59,6 +64,11 @@ const subscriptionSchema = new Schema<ISubscriptionDocument>(
       required: true,
       min: 0,
     },
+    taxableAmount: { type: Number, min: 0 },
+    gstAmount: { type: Number, min: 0 },
+    razorpayFee: { type: Number, min: 0 },
+    razorpayGst: { type: Number, min: 0 },
+    netSettlementAmount: { type: Number, min: 0 },
     startDate: {
       type: Date,
     },

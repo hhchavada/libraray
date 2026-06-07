@@ -3,6 +3,8 @@ import mongoose, { Document, Schema, Types } from 'mongoose';
 export interface ILibrary {
   libraryName: string;
   address: string;
+  state?: string;
+  city?: string;
   totalSeats: number;
   hasCustomSeatMap: boolean;
   /** Grid width for seat map UI (0-based indices 0..seatMapColumns-1) */
@@ -30,6 +32,14 @@ const librarySchema = new Schema<ILibraryDocument>(
     address: {
       type: String,
       required: true,
+      trim: true,
+    },
+    state: {
+      type: String,
+      trim: true,
+    },
+    city: {
+      type: String,
       trim: true,
     },
     totalSeats: {
