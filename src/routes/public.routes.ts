@@ -1,5 +1,6 @@
 import { Router } from 'express';
 import { scanController } from '../controllers/scan.controller';
+import { locationController } from '../controllers/location.controller';
 import { validate } from '../middlewares/validate';
 import { scanValidation } from '../validations/scan.validation';
 
@@ -11,5 +12,8 @@ router.post(
   validate(scanValidation.registerDemoStudent),
   scanController.registerDemoStudent
 );
+
+// Location APIs
+router.get('/locations', locationController.getLocations);
 
 export default router;

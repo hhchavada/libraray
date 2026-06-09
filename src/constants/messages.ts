@@ -1,6 +1,7 @@
 export const MESSAGES = {
   // General
   ROUTE_NOT_FOUND: 'Route not found',
+  LOCATIONS_FETCHED: 'Locations fetched successfully',
   INTERNAL_SERVER_ERROR: 'Internal server error',
   VALIDATION_ERROR: 'Validation error',
   INVALID_MEMBER_ID: 'Invalid member id',
