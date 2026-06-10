@@ -20,9 +20,20 @@ export type SeatMapType = 'default' | 'custom';
 export interface CreateLibraryData {
   libraryName: string;
   address: string;
+  state?: string;
+  city?: string;
   seatMapType: SeatMapType;
   totalSeats?: number;
   selectedSeats?: SeatGridPlacement[];
+}
+
+export interface UpdateLibraryData {
+  libraryName?: string;
+  address?: string;
+  state?: string;
+  city?: string;
+  totalSeats?: number;
+  hasCustomSeatMap?: boolean;
 }
 
 const validateSeatPlacements = (placements: SeatGridPlacement[]): SeatGridPlacement[] => {
@@ -85,6 +96,8 @@ export const libraryService = {
     const library = await Library.create({
       libraryName: data.libraryName,
       address: data.address,
+      ...(data.state?.trim() ? { state: data.state.trim() } : {}),
+      ...(data.city?.trim() ? { city: data.city.trim() } : {}),
       totalSeats,
       hasCustomSeatMap: useCustomSeatMap,
       seatMapColumns,
@@ -160,6 +173,8 @@ export const libraryService = {
       ownerId: library.owner.toString(),
       libraryName: libraryObj.libraryName,
       address: libraryObj.address,
+      state: libraryObj.state ?? null,
+      city: libraryObj.city ?? null,
       totalSeats: libraryObj.totalSeats,
       hasCustomSeatMap: libraryObj.hasCustomSeatMap,
       seatMapColumns: libraryObj.seatMapColumns,
@@ -188,11 +203,19 @@ export const libraryService = {
   async updateLibrary(
     libraryId: string,
     ownerId: string,
-    data: Partial<CreateLibraryData>
+    data: UpdateLibraryData
   ): Promise<ILibraryDocument> {
+    const updates: UpdateLibraryData = {};
+    if (data.libraryName !== undefined) updates.libraryName = data.libraryName;
+    if (data.address !== undefined) updates.address = data.address;
+    if (data.state !== undefined) updates.state = data.state.trim() || undefined;
+    if (data.city !== undefined) updates.city = data.city.trim() || undefined;
+    if (data.totalSeats !== undefined) updates.totalSeats = data.totalSeats;
+    if (data.hasCustomSeatMap !== undefined) updates.hasCustomSeatMap = data.hasCustomSeatMap;
+
     const library = await Library.findOneAndUpdate(
       { _id: libraryId, owner: ownerId },
-      data,
+      updates,
       { new: true, runValidators: true }
     );
 
