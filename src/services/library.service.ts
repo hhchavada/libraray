@@ -12,6 +12,7 @@ import {
   isValidGridIndex,
   SeatGridPlacement,
 } from '../utils/seatGrid.util';
+import { getFreeTrialForUserId } from '../utils/freeTrial.util';
 
 const DEFAULT_SEAT_MAP_COLUMNS = 12;
 
@@ -20,9 +21,20 @@ export type SeatMapType = 'default' | 'custom';
 export interface CreateLibraryData {
   libraryName: string;
   address: string;
+  state?: string;
+  city?: string;
   seatMapType: SeatMapType;
   totalSeats?: number;
   selectedSeats?: SeatGridPlacement[];
+}
+
+export interface UpdateLibraryData {
+  libraryName?: string;
+  address?: string;
+  state?: string;
+  city?: string;
+  totalSeats?: number;
+  hasCustomSeatMap?: boolean;
 }
 
 const validateSeatPlacements = (placements: SeatGridPlacement[]): SeatGridPlacement[] => {
@@ -85,6 +97,8 @@ export const libraryService = {
     const library = await Library.create({
       libraryName: data.libraryName,
       address: data.address,
+      ...(data.state?.trim() ? { state: data.state.trim() } : {}),
+      ...(data.city?.trim() ? { city: data.city.trim() } : {}),
       totalSeats,
       hasCustomSeatMap: useCustomSeatMap,
       seatMapColumns,
@@ -106,6 +120,7 @@ export const libraryService = {
     }
 
     const seats = await Seat.find({ library: library._id }).sort({ seatNumber: 1 });
+    const freeTrial = await getFreeTrialForUserId(ownerId);
 
     return {
       library,
@@ -115,6 +130,7 @@ export const libraryService = {
         rows: seatMapRows,
         columns: seatMapColumns,
       },
+      freeTrial,
     };
   },
 
@@ -153,6 +169,7 @@ export const libraryService = {
   async getLibraryForApp(ownerId: string) {
     const library = await this.getLibraryByOwner(ownerId);
     const libraryObj = library.toJSON();
+    const freeTrial = await getFreeTrialForUserId(ownerId);
 
     return {
       _id: library._id.toString(),
@@ -160,6 +177,8 @@ export const libraryService = {
       ownerId: library.owner.toString(),
       libraryName: libraryObj.libraryName,
       address: libraryObj.address,
+      state: libraryObj.state ?? null,
+      city: libraryObj.city ?? null,
       totalSeats: libraryObj.totalSeats,
       hasCustomSeatMap: libraryObj.hasCustomSeatMap,
       seatMapColumns: libraryObj.seatMapColumns,
@@ -170,6 +189,7 @@ export const libraryService = {
       qrCodeImage: libraryObj.qrCodeImage,
       createdAt: libraryObj.createdAt,
       updatedAt: libraryObj.updatedAt,
+      freeTrial,
     };
   },
 
@@ -188,11 +208,19 @@ export const libraryService = {
   async updateLibrary(
     libraryId: string,
     ownerId: string,
-    data: Partial<CreateLibraryData>
+    data: UpdateLibraryData
   ): Promise<ILibraryDocument> {
+    const updates: UpdateLibraryData = {};
+    if (data.libraryName !== undefined) updates.libraryName = data.libraryName;
+    if (data.address !== undefined) updates.address = data.address;
+    if (data.state !== undefined) updates.state = data.state.trim() || undefined;
+    if (data.city !== undefined) updates.city = data.city.trim() || undefined;
+    if (data.totalSeats !== undefined) updates.totalSeats = data.totalSeats;
+    if (data.hasCustomSeatMap !== undefined) updates.hasCustomSeatMap = data.hasCustomSeatMap;
+
     const library = await Library.findOneAndUpdate(
       { _id: libraryId, owner: ownerId },
-      data,
+      updates,
       { new: true, runValidators: true }
     );
 
