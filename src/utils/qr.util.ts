@@ -1,6 +1,7 @@
 import crypto from 'crypto';
 import QRCode from 'qrcode';
 import { ENV } from '../config/env';
+import { uploadBufferToCloudinary } from './cloudinary.util';
 
 export interface LibraryQrData {
   qrCodeId: string;
@@ -22,7 +23,7 @@ export const generateLibraryQrCode = async (
     scanUrl: `${ENV.APP_BASE_URL}/scan?libraryId=${libraryId}&qrCodeId=${qrCodeId}`,
   });
 
-  const qrCodeImage = await QRCode.toDataURL(qrCodePayload, {
+  const qrBuffer = await QRCode.toBuffer(qrCodePayload, {
     errorCorrectionLevel: 'H',
     margin: 2,
     width: 320,
@@ -32,5 +33,11 @@ export const generateLibraryQrCode = async (
     },
   });
 
-  return { qrCodeId, qrCodePayload, qrCodeImage };
+  const uploadResult = await uploadBufferToCloudinary(
+    qrBuffer,
+    'library-qr-codes',
+    `qr-${qrCodeId}`
+  );
+
+  return { qrCodeId, qrCodePayload, qrCodeImage: uploadResult.secure_url };
 };

@@ -29,4 +29,8 @@ export const ENV = {
   RAZORPAY_PAYMENT_CALLBACK_URL:
     process.env.RAZORPAY_PAYMENT_CALLBACK_URL ||
     `${process.env.APP_BASE_URL || 'http://localhost:5000'}/api/v1/subscription/payment-callback`,
+  /** Cloudinary configuration for image storage */
+  CLOUDINARY_CLOUD_NAME: process.env.CLOUDINARY_CLOUD_NAME!,
+  CLOUDINARY_API_KEY: process.env.CLOUDINARY_API_KEY!,
+  CLOUDINARY_API_SECRET: process.env.CLOUDINARY_API_SECRET!,
 };
