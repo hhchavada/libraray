@@ -9,6 +9,8 @@ export interface IUser {
   role: UserRole;
   isActive: boolean;
   isEmailVerified: boolean;
+  /** Set at registration; 7-day free trial counts from this timestamp. */
+  freeTrialStartedAt?: Date;
   refreshToken?: string;
   createdAt: Date;
   updatedAt: Date;
@@ -53,6 +55,9 @@ const userSchema = new Schema<IUserDocument>(
     isEmailVerified: {
       type: Boolean,
       default: false,
+    },
+    freeTrialStartedAt: {
+      type: Date,
     },
     refreshToken: {
       type: String,

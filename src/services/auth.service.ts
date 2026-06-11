@@ -14,6 +14,7 @@ import {
 import { UserRole, OtpType } from '../constants/enums';
 import { otpService } from './otp.service';
 import { logger } from '../utils/logger';
+import { buildFreeTrialInfo } from '../utils/freeTrial.util';
 
 const LOG_TAG = 'AUTH';
 
@@ -28,6 +29,7 @@ const sanitizeUser = (user: IUserDocument) => {
   const userObj = user.toObject();
   delete userObj.password;
   delete userObj.refreshToken;
+  userObj.freeTrial = buildFreeTrialInfo(userObj.freeTrialStartedAt, userObj.createdAt);
   return userObj;
 };
 
@@ -75,6 +77,7 @@ export const authService = {
       password: hashedPassword,
       role: UserRole.LIBRARY_OWNER,
       isEmailVerified: false,
+      freeTrialStartedAt: new Date(),
     });
 
     logger.info(LOG_TAG, 'Register success — sending verification OTP', {

@@ -12,6 +12,7 @@ import {
   isValidGridIndex,
   SeatGridPlacement,
 } from '../utils/seatGrid.util';
+import { getFreeTrialForUserId } from '../utils/freeTrial.util';
 
 const DEFAULT_SEAT_MAP_COLUMNS = 12;
 
@@ -119,6 +120,7 @@ export const libraryService = {
     }
 
     const seats = await Seat.find({ library: library._id }).sort({ seatNumber: 1 });
+    const freeTrial = await getFreeTrialForUserId(ownerId);
 
     return {
       library,
@@ -128,6 +130,7 @@ export const libraryService = {
         rows: seatMapRows,
         columns: seatMapColumns,
       },
+      freeTrial,
     };
   },
 
@@ -166,6 +169,7 @@ export const libraryService = {
   async getLibraryForApp(ownerId: string) {
     const library = await this.getLibraryByOwner(ownerId);
     const libraryObj = library.toJSON();
+    const freeTrial = await getFreeTrialForUserId(ownerId);
 
     return {
       _id: library._id.toString(),
@@ -185,6 +189,7 @@ export const libraryService = {
       qrCodeImage: libraryObj.qrCodeImage,
       createdAt: libraryObj.createdAt,
       updatedAt: libraryObj.updatedAt,
+      freeTrial,
     };
   },
 

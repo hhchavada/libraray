@@ -4,6 +4,7 @@ import { ApiResponse } from '../utils/ApiResponse';
 import { asyncHandler } from '../utils/asyncHandler';
 import { MESSAGES } from '../constants/messages';
 import { getAuthUserId } from '../utils/auth.util';
+import { getFreeTrialForUserId } from '../utils/freeTrial.util';
 
 export const subscriptionController = {
   getPlans: asyncHandler(async (_req: Request, res: Response) => {
@@ -33,8 +34,17 @@ export const subscriptionController = {
   }),
 
   getCurrent: asyncHandler(async (req: Request, res: Response) => {
-    const subscription = await subscriptionService.getCurrentSubscription(getAuthUserId(req));
-    res.status(200).json(new ApiResponse(200, MESSAGES.SUBSCRIPTION_FETCHED, subscription));
+    const userId = getAuthUserId(req);
+    const [subscription, freeTrial] = await Promise.all([
+      subscriptionService.getCurrentSubscription(userId),
+      getFreeTrialForUserId(userId),
+    ]);
+    res.status(200).json(
+      new ApiResponse(200, MESSAGES.SUBSCRIPTION_FETCHED, {
+        subscription,
+        freeTrial,
+      })
+    );
   }),
 
   getHistory: asyncHandler(async (req: Request, res: Response) => {
