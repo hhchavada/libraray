@@ -7,6 +7,7 @@ import { scanValidation } from '../validations/scan.validation';
 const router = Router();
 
 router.get('/scan/library', validate(scanValidation.getLibraryInfo, 'query'), scanController.getLibraryInfo);
+router.get('/scan/qr-image', validate(scanValidation.getLibraryInfo, 'query'), scanController.getQrImage);
 router.post(
   '/scan/register',
   validate(scanValidation.registerDemoStudent),

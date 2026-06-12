@@ -46,6 +46,7 @@ export const MESSAGES = {
   LIBRARY_STATS_FETCHED: 'Library stats fetched successfully',
   LIBRARY_QR_FETCHED: 'Library QR code fetched successfully',
   LIBRARY_QR_GENERATED: 'Library QR code generated successfully',
+  LIBRARY_QR_NOT_FOUND: 'Library QR code image not found',
   SELECTED_SEATS_REQUIRED: 'Selected seats are required when custom seat map is enabled',
   INVALID_SELECTED_SEATS: 'Selected seats must be unique positive numbers',
   INVALID_SEAT_GRID: 'Invalid seat grid row/column. Both must be numbers between 0 and 25',
