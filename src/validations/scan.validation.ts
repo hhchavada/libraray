@@ -6,7 +6,7 @@ export const scanValidation = {
   getLibraryInfo: Joi.object({
     libraryId: Joi.string().hex().length(24).required(),
     qrCodeId: Joi.string().required(),
-  }),
+  }).unknown(true),
 
   registerDemoStudent: Joi.object({
     libraryId: Joi.string().hex().length(24).required(),
