@@ -4,7 +4,7 @@ import { scanService } from '../services/scan.service';
 import { ApiResponse } from '../utils/ApiResponse';
 import { asyncHandler } from '../utils/asyncHandler';
 import { MESSAGES } from '../constants/messages';
-import { dataUrlToPngBuffer } from '../utils/qr.util';
+import { resolveQrImageBuffer } from '../utils/qr.util';
 import { ApiError } from '../utils/ApiError';
 
 export const scanController = {
@@ -32,7 +32,7 @@ export const scanController = {
       throw new ApiError(404, MESSAGES.LIBRARY_QR_NOT_FOUND);
     }
 
-    const imageBuffer = dataUrlToPngBuffer(library.qrCodeImage);
+    const imageBuffer = await resolveQrImageBuffer(library.qrCodeImage);
     res.set('Content-Type', 'image/png');
     res.set('Cache-Control', 'public, max-age=86400');
     res.send(imageBuffer);

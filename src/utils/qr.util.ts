@@ -3,6 +3,8 @@ import QRCode from 'qrcode';
 import { ENV } from '../config/env';
 import { uploadBufferToCloudinary } from './cloudinary.util';
 
+const CLOUDINARY_QR_FOLDER = 'library-qr-codes';
+
 export interface LibraryQrData {
   qrCodeId: string;
   qrCodePayload: string;
@@ -20,6 +22,19 @@ export const buildLibraryQrImageUrl = (libraryId: string, qrCodeId: string): str
 export const dataUrlToPngBuffer = (dataUrl: string): Buffer => {
   const base64 = dataUrl.replace(/\s/g, '').replace(/^data:image\/\w+;base64,/, '');
   return Buffer.from(base64, 'base64');
+};
+
+export const resolveQrImageBuffer = async (qrCodeImage: string): Promise<Buffer> => {
+  if (qrCodeImage.startsWith('data:')) {
+    return dataUrlToPngBuffer(qrCodeImage);
+  }
+
+  const response = await fetch(qrCodeImage);
+  if (!response.ok) {
+    throw new Error(`Failed to fetch QR image: ${response.status}`);
+  }
+
+  return Buffer.from(await response.arrayBuffer());
 };
 
 export const generateLibraryQrCode = async (
@@ -50,7 +65,20 @@ export const generateLibraryQrCode = async (
 
   qrCodeImage = qrCodeImage.replace(/\s/g, '');
 
+  const pngBuffer = dataUrlToPngBuffer(qrCodeImage);
+  const uploadResult = await uploadBufferToCloudinary(
+    pngBuffer,
+    CLOUDINARY_QR_FOLDER,
+    qrCodeId
+  );
+
   const qrCodeImageUrl = buildLibraryQrImageUrl(libraryId, qrCodeId);
 
-  return { qrCodeId, qrCodePayload, qrCodeScanUrl, qrCodeImageUrl, qrCodeImage };
+  return {
+    qrCodeId,
+    qrCodePayload,
+    qrCodeScanUrl,
+    qrCodeImageUrl,
+    qrCodeImage: uploadResult.secure_url,
+  };
 };
