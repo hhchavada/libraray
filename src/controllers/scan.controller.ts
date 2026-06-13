@@ -1,6 +1,7 @@
 import { Request, Response } from 'express';
 import path from 'path';
 import { scanService } from '../services/scan.service';
+import { syncLibraryQrCodeIfNeeded } from '../services/library.service';
 import { ApiResponse } from '../utils/ApiResponse';
 import { asyncHandler } from '../utils/asyncHandler';
 import { MESSAGES } from '../constants/messages';
@@ -10,6 +11,10 @@ import { ApiError } from '../utils/ApiError';
 export const scanController = {
   renderScanPage: (_req: Request, res: Response): void => {
     res.sendFile(path.join(__dirname, '../../public/scan.html'));
+  },
+
+  renderLibraryQrPage: (_req: Request, res: Response): void => {
+    res.sendFile(path.join(__dirname, '../../public/library-qr.html'));
   },
 
   getLibraryInfo: asyncHandler(async (req: Request, res: Response) => {
@@ -27,6 +32,8 @@ export const scanController = {
   getQrImage: asyncHandler(async (req: Request, res: Response) => {
     const { libraryId, qrCodeId } = req.query as { libraryId: string; qrCodeId: string };
     const library = await scanService.validateLibraryQr(libraryId, qrCodeId);
+
+    await syncLibraryQrCodeIfNeeded(library);
 
     if (!library.qrCodeImage) {
       throw new ApiError(404, MESSAGES.LIBRARY_QR_NOT_FOUND);

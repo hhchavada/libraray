@@ -13,6 +13,7 @@ app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 app.use(cookieParser());
 
+app.get('/scan/qr', scanController.renderLibraryQrPage);
 app.get('/scan', scanController.renderScanPage);
 app.get('/admin', adminController.renderAdminPage);
 app.use(express.static(path.join(__dirname, '../public')));

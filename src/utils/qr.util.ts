@@ -19,6 +19,37 @@ export const buildLibraryScanUrl = (libraryId: string, qrCodeId: string): string
 export const buildLibraryQrImageUrl = (libraryId: string, qrCodeId: string): string =>
   `${ENV.APP_BASE_URL}/api/v1/public/scan/qr-image?libraryId=${libraryId}&qrCodeId=${qrCodeId}`;
 
+export const buildLibraryQrShareUrl = (libraryId: string, qrCodeId: string): string =>
+  `${ENV.APP_BASE_URL}/scan/qr?libraryId=${libraryId}&qrCodeId=${qrCodeId}`;
+
+export const libraryQrNeedsRegeneration = (
+  libraryId: string,
+  qrCodeId: string | undefined,
+  qrCodeImage: string | undefined,
+  qrCodePayload: string | undefined
+): boolean => {
+  if (!qrCodeImage || !qrCodeId) {
+    return true;
+  }
+
+  const expectedScanUrl = buildLibraryScanUrl(libraryId, qrCodeId);
+
+  if (!qrCodePayload?.startsWith('{')) {
+    return true;
+  }
+
+  try {
+    const payload = JSON.parse(qrCodePayload) as { scanUrl?: string };
+    if (!payload.scanUrl || payload.scanUrl !== expectedScanUrl) {
+      return true;
+    }
+  } catch {
+    return true;
+  }
+
+  return false;
+};
+
 export const dataUrlToPngBuffer = (dataUrl: string): Buffer => {
   const base64 = dataUrl.replace(/\s/g, '').replace(/^data:image\/\w+;base64,/, '');
   return Buffer.from(base64, 'base64');
@@ -39,9 +70,11 @@ export const resolveQrImageBuffer = async (qrCodeImage: string): Promise<Buffer>
 
 export const generateLibraryQrCode = async (
   libraryId: string,
-  libraryName: string
+  libraryName: string,
+  options?: { qrCodeId?: string }
 ): Promise<LibraryQrData> => {
-  const qrCodeId = `LQR-${crypto.randomBytes(6).toString('hex').toUpperCase()}`;
+  const qrCodeId =
+    options?.qrCodeId ?? `LQR-${crypto.randomBytes(6).toString('hex').toUpperCase()}`;
   const qrCodeScanUrl = buildLibraryScanUrl(libraryId, qrCodeId);
 
   const qrCodePayload = JSON.stringify({

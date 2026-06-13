@@ -7,8 +7,10 @@ import { SeatStatus } from '../constants/enums';
 import { seatService } from './seat.service';
 import {
   buildLibraryQrImageUrl,
+  buildLibraryQrShareUrl,
   buildLibraryScanUrl,
   generateLibraryQrCode,
+  libraryQrNeedsRegeneration,
 } from '../utils/qr.util';
 import {
   computeSeatMapRows,
@@ -68,6 +70,30 @@ const validateSeatPlacements = (placements: SeatGridPlacement[]): SeatGridPlacem
   return placements;
 };
 
+export const syncLibraryQrCodeIfNeeded = async (library: ILibraryDocument): Promise<void> => {
+  const libraryId = library._id.toString();
+
+  if (
+    !libraryQrNeedsRegeneration(
+      libraryId,
+      library.qrCodeId,
+      library.qrCodeImage,
+      library.qrCodePayload
+    )
+  ) {
+    return;
+  }
+
+  const qrData = await generateLibraryQrCode(libraryId, library.libraryName, {
+    qrCodeId: library.qrCodeId || undefined,
+  });
+
+  library.qrCodeId = qrData.qrCodeId;
+  library.qrCodePayload = qrData.qrCodePayload;
+  library.qrCodeImage = qrData.qrCodeImage;
+  await library.save();
+};
+
 export const libraryService = {
   async createLibrary(data: CreateLibraryData, ownerId: string) {
     const existingLibrary = await Library.findOne({ owner: ownerId });
@@ -120,6 +146,7 @@ export const libraryService = {
     const libraryWithQr = {
       ...(library.toObject() as unknown as Record<string, unknown>),
       qrCodeScanUrl: qrData.qrCodeScanUrl,
+      qrCodeShareUrl: buildLibraryQrShareUrl(library._id.toString(), qrData.qrCodeId),
       qrCodeImage: qrData.qrCodeImageUrl,
       qrCodeImageUrl: qrData.qrCodeImageUrl,
     };
@@ -147,19 +174,10 @@ export const libraryService = {
 
   async getLibraryQrCode(ownerId: string) {
     const library = await this.getLibraryByOwner(ownerId);
-    const needsRegeneration =
-      !library.qrCodeImage ||
-      (library.qrCodePayload?.startsWith('{') ?? false);
-
-    if (needsRegeneration) {
-      const qrData = await generateLibraryQrCode(library._id.toString(), library.libraryName);
-      library.qrCodeId = qrData.qrCodeId;
-      library.qrCodePayload = qrData.qrCodePayload;
-      library.qrCodeImage = qrData.qrCodeImage;
-      await library.save();
-    }
+    await syncLibraryQrCodeIfNeeded(library);
 
     const qrCodeImageUrl = buildLibraryQrImageUrl(library._id.toString(), library.qrCodeId);
+    const qrCodeShareUrl = buildLibraryQrShareUrl(library._id.toString(), library.qrCodeId);
 
     return {
       libraryId: library._id,
@@ -167,6 +185,7 @@ export const libraryService = {
       qrCodeId: library.qrCodeId,
       qrCodePayload: library.qrCodePayload,
       qrCodeScanUrl: buildLibraryScanUrl(library._id.toString(), library.qrCodeId),
+      qrCodeShareUrl,
       qrCodeImage: qrCodeImageUrl,
       qrCodeImageUrl,
     };
@@ -186,10 +205,13 @@ export const libraryService = {
    */
   async getLibraryForApp(ownerId: string) {
     const library = await this.getLibraryByOwner(ownerId);
+    await syncLibraryQrCodeIfNeeded(library);
+
     const libraryObj = library.toJSON();
     const freeTrial = await getFreeTrialForUserId(ownerId);
 
     const qrCodeImageUrl = buildLibraryQrImageUrl(library._id.toString(), libraryObj.qrCodeId);
+    const qrCodeShareUrl = buildLibraryQrShareUrl(library._id.toString(), libraryObj.qrCodeId);
 
     return {
       _id: library._id.toString(),
@@ -207,6 +229,7 @@ export const libraryService = {
       qrCodeId: libraryObj.qrCodeId,
       qrCodePayload: libraryObj.qrCodePayload,
       qrCodeScanUrl: buildLibraryScanUrl(library._id.toString(), libraryObj.qrCodeId),
+      qrCodeShareUrl,
       qrCodeImage: qrCodeImageUrl,
       qrCodeImageUrl,
       createdAt: libraryObj.createdAt,
