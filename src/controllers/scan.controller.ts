@@ -34,7 +34,7 @@ export const scanController = {
     const scanUrl = buildLibraryScanUrl(libraryId, qrCodeId);
     const imageBuffer = await generateQrScanPngBuffer(scanUrl);
     res.set('Content-Type', 'image/png');
-    res.set('Cache-Control', 'public, max-age=31536000, immutable');
+    res.set('Cache-Control', 'no-cache, no-store, must-revalidate');
     res.send(imageBuffer);
   }),
 
@@ -45,7 +45,7 @@ export const scanController = {
     const scanUrl = buildLibraryScanUrl(libraryId, qrCodeId);
     const svg = await generateQrScanSvg(scanUrl);
     res.set('Content-Type', 'image/svg+xml; charset=utf-8');
-    res.set('Cache-Control', 'public, max-age=31536000, immutable');
+    res.set('Cache-Control', 'no-cache, no-store, must-revalidate');
     res.set('Content-Disposition', `attachment; filename="library-qr-${qrCodeId}.svg"`);
     res.send(svg);
   }),

@@ -108,7 +108,7 @@
 
     function renderQr(library) {
       const qrImageUrl = apiBase + '/scan/qr-image?libraryId=' + encodeURIComponent(libraryId)
-        + '&qrCodeId=' + encodeURIComponent(qrCodeId);
+        + '&qrCodeId=' + encodeURIComponent(qrCodeId) + '&v=2';
       const qrSvgUrl = apiBase + '/scan/qr-svg?libraryId=' + encodeURIComponent(libraryId)
         + '&qrCodeId=' + encodeURIComponent(qrCodeId);
       const safeName = (library.libraryName || 'library').replace(/[^\w\-]+/g, '-').toLowerCase();

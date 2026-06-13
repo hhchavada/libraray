@@ -11,7 +11,7 @@ import {
   buildLibraryQrSvgUrl,
   buildLibraryScanUrl,
   generateLibraryQrCode,
-  libraryQrNeedsRegeneration,
+  refreshLibraryQrPayload,
 } from '../utils/qr.util';
 import {
   computeSeatMapRows,
@@ -73,8 +73,19 @@ const validateSeatPlacements = (placements: SeatGridPlacement[]): SeatGridPlacem
 
 export const syncLibraryQrCodeIfNeeded = async (library: ILibraryDocument): Promise<void> => {
   const libraryId = library._id.toString();
+  const expectedPayload = refreshLibraryQrPayload(
+    libraryId,
+    library.qrCodeId,
+    library.libraryName
+  );
 
-  if (!libraryQrNeedsRegeneration(library.qrCodeId, library.qrCodePayload)) {
+  if (library.qrCodeId && library.qrCodePayload && library.qrCodePayload === expectedPayload) {
+    return;
+  }
+
+  if (library.qrCodeId && library.qrCodePayload) {
+    library.qrCodePayload = expectedPayload;
+    await library.save();
     return;
   }
 

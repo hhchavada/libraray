@@ -23,8 +23,14 @@ export interface LibraryQrData {
   qrCodeImage: string;
 }
 
-export const buildLibraryScanUrl = (libraryId: string, qrCodeId: string): string =>
-  `${ENV.LIBRARY_QR_BASE_URL}?libraryId=${libraryId}&qrCodeId=${qrCodeId}`;
+const PRODUCTION_SCAN_BASE = 'https://bridgrplatform.com/scan';
+
+export const buildLibraryScanUrl = (libraryId: string, qrCodeId: string): string => {
+  if (ENV.NODE_ENV === 'development') {
+    return `${ENV.LIBRARY_QR_BASE_URL}?libraryId=${libraryId}&qrCodeId=${qrCodeId}`;
+  }
+  return `${PRODUCTION_SCAN_BASE}?libraryId=${libraryId}&qrCodeId=${qrCodeId}`;
+};
 
 export const buildLibraryQrImageUrl = (libraryId: string, qrCodeId: string): string =>
   `${ENV.APP_BASE_URL}/api/v1/public/scan/qr-image?libraryId=${libraryId}&qrCodeId=${qrCodeId}`;
@@ -65,6 +71,19 @@ export const resolveQrImageBuffer = async (qrCodeImage: string): Promise<Buffer>
   return Buffer.from(await response.arrayBuffer());
 };
 
+export const refreshLibraryQrPayload = (
+  libraryId: string,
+  qrCodeId: string,
+  libraryName: string
+): string =>
+  JSON.stringify({
+    type: 'library',
+    libraryId,
+    qrCodeId,
+    libraryName,
+    scanUrl: buildLibraryScanUrl(libraryId, qrCodeId),
+  });
+
 export const generateLibraryQrCode = async (
   libraryId: string,
   libraryName: string,
@@ -73,16 +92,9 @@ export const generateLibraryQrCode = async (
   const qrCodeId =
     options?.qrCodeId ?? `LQR-${crypto.randomBytes(6).toString('hex').toUpperCase()}`;
   const qrCodeScanUrl = buildLibraryScanUrl(libraryId, qrCodeId);
+  const qrCodePayload = refreshLibraryQrPayload(libraryId, qrCodeId, libraryName);
 
-  const qrCodePayload = JSON.stringify({
-    type: 'library',
-    libraryId,
-    qrCodeId,
-    libraryName,
-    scanUrl: qrCodeScanUrl,
-  });
-
-  // Encode the URL (not JSON) so phone cameras open the registration page on scan.
+  // Encode the plain URL (never JSON) so phone cameras open the registration page.
   const pngBuffer = await generateQrScanPngBuffer(qrCodeScanUrl);
 
   let cloudinaryUrl: string | undefined;
