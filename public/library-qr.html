@@ -50,7 +50,36 @@
     .subhint {
       color: #6b7280;
       font-size: 0.8rem;
+      margin-bottom: 20px;
     }
+    .badge {
+      display: inline-block;
+      background: #ecfdf5;
+      color: #047857;
+      font-size: 0.75rem;
+      font-weight: 600;
+      padding: 6px 12px;
+      border-radius: 999px;
+      margin-bottom: 16px;
+    }
+    .download-btn {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      width: 100%;
+      max-width: 280px;
+      padding: 14px 20px;
+      background: #2563eb;
+      color: #fff;
+      border: none;
+      border-radius: 10px;
+      font-size: 1rem;
+      font-weight: 600;
+      text-decoration: none;
+      cursor: pointer;
+    }
+    .download-btn:hover { background: #1d4ed8; }
     .loading, .invalid-qr {
       padding: 48px 24px;
       color: #6b7280;
@@ -79,7 +108,11 @@
 
     function renderQr(library) {
       const qrImageUrl = apiBase + '/scan/qr-image?libraryId=' + encodeURIComponent(libraryId)
-        + '&qrCodeId=' + encodeURIComponent(qrCodeId) + '&t=' + Date.now();
+        + '&qrCodeId=' + encodeURIComponent(qrCodeId);
+      const qrSvgUrl = apiBase + '/scan/qr-svg?libraryId=' + encodeURIComponent(libraryId)
+        + '&qrCodeId=' + encodeURIComponent(qrCodeId);
+      const safeName = (library.libraryName || 'library').replace(/[^\w\-]+/g, '-').toLowerCase();
+      const fileName = safeName + '-qr-' + qrCodeId + '.svg';
 
       app.innerHTML = [
         '<div class="header">',
@@ -87,11 +120,13 @@
         '<p>', (library.address || ''), '</p>',
         '</div>',
         '<div class="content">',
+        '<span class="badge">Permanent QR — never expires</span>',
         '<div class="qr-wrap">',
         '<img src="', qrImageUrl, '" alt="Library registration QR code" />',
         '</div>',
-        '<p class="hint">Scan this QR code to open the student registration form.</p>',
-        '<p class="subhint">Print this page or show it on screen for students to scan.</p>',
+        '<p class="hint">Students scan this QR to open the registration form.</p>',
+        '<p class="subhint">Print this page or show it on screen. This QR stays valid permanently.</p>',
+        '<a class="download-btn" href="', qrSvgUrl, '" download="', fileName, '">Download QR (SVG)</a>',
         '</div>'
       ].join('');
     }

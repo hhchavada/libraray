@@ -52,7 +52,7 @@ export const MESSAGES = {
   INVALID_SEAT_GRID: 'Invalid seat grid row/column. Both must be numbers between 0 and 25',
   DUPLICATE_SEAT_CELL: 'Two seats cannot use the same grid cell',
   SEAT_MAP_GRID_REQUIRED: 'seatMapRows and seatMapColumns are required for custom seat map',
-  INVALID_QR_CODE: 'Invalid or expired QR code',
+  INVALID_QR_CODE: 'Invalid QR code',
   SCAN_LIBRARY_FETCHED: 'Library details fetched successfully',
   SCAN_REGISTRATION_SUCCESS: 'Student registered successfully via QR scan',
 

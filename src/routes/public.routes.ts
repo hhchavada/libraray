@@ -8,6 +8,7 @@ const router = Router();
 
 router.get('/scan/library', validate(scanValidation.getLibraryInfo, 'query'), scanController.getLibraryInfo);
 router.get('/scan/qr-image', validate(scanValidation.getLibraryInfo, 'query'), scanController.getQrImage);
+router.get('/scan/qr-svg', validate(scanValidation.getLibraryInfo, 'query'), scanController.getQrSvg);
 router.post(
   '/scan/register',
   validate(scanValidation.registerDemoStudent),

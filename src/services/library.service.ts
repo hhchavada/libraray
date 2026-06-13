@@ -8,6 +8,7 @@ import { seatService } from './seat.service';
 import {
   buildLibraryQrImageUrl,
   buildLibraryQrShareUrl,
+  buildLibraryQrSvgUrl,
   buildLibraryScanUrl,
   generateLibraryQrCode,
   libraryQrNeedsRegeneration,
@@ -73,14 +74,7 @@ const validateSeatPlacements = (placements: SeatGridPlacement[]): SeatGridPlacem
 export const syncLibraryQrCodeIfNeeded = async (library: ILibraryDocument): Promise<void> => {
   const libraryId = library._id.toString();
 
-  if (
-    !libraryQrNeedsRegeneration(
-      libraryId,
-      library.qrCodeId,
-      library.qrCodeImage,
-      library.qrCodePayload
-    )
-  ) {
+  if (!libraryQrNeedsRegeneration(library.qrCodeId, library.qrCodePayload)) {
     return;
   }
 
@@ -147,6 +141,7 @@ export const libraryService = {
       ...(library.toObject() as unknown as Record<string, unknown>),
       qrCodeScanUrl: qrData.qrCodeScanUrl,
       qrCodeShareUrl: buildLibraryQrShareUrl(library._id.toString(), qrData.qrCodeId),
+      qrCodeSvgUrl: buildLibraryQrSvgUrl(library._id.toString(), qrData.qrCodeId),
       qrCodeImage: qrData.qrCodeImageUrl,
       qrCodeImageUrl: qrData.qrCodeImageUrl,
     };
@@ -178,6 +173,7 @@ export const libraryService = {
 
     const qrCodeImageUrl = buildLibraryQrImageUrl(library._id.toString(), library.qrCodeId);
     const qrCodeShareUrl = buildLibraryQrShareUrl(library._id.toString(), library.qrCodeId);
+    const qrCodeSvgUrl = buildLibraryQrSvgUrl(library._id.toString(), library.qrCodeId);
 
     return {
       libraryId: library._id,
@@ -186,6 +182,7 @@ export const libraryService = {
       qrCodePayload: library.qrCodePayload,
       qrCodeScanUrl: buildLibraryScanUrl(library._id.toString(), library.qrCodeId),
       qrCodeShareUrl,
+      qrCodeSvgUrl,
       qrCodeImage: qrCodeImageUrl,
       qrCodeImageUrl,
     };
@@ -212,6 +209,7 @@ export const libraryService = {
 
     const qrCodeImageUrl = buildLibraryQrImageUrl(library._id.toString(), libraryObj.qrCodeId);
     const qrCodeShareUrl = buildLibraryQrShareUrl(library._id.toString(), libraryObj.qrCodeId);
+    const qrCodeSvgUrl = buildLibraryQrSvgUrl(library._id.toString(), libraryObj.qrCodeId);
 
     return {
       _id: library._id.toString(),
@@ -230,6 +228,7 @@ export const libraryService = {
       qrCodePayload: libraryObj.qrCodePayload,
       qrCodeScanUrl: buildLibraryScanUrl(library._id.toString(), libraryObj.qrCodeId),
       qrCodeShareUrl,
+      qrCodeSvgUrl,
       qrCodeImage: qrCodeImageUrl,
       qrCodeImageUrl,
       createdAt: libraryObj.createdAt,

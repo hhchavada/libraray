@@ -1,12 +1,10 @@
 import { Request, Response } from 'express';
 import path from 'path';
 import { scanService } from '../services/scan.service';
-import { syncLibraryQrCodeIfNeeded } from '../services/library.service';
 import { ApiResponse } from '../utils/ApiResponse';
 import { asyncHandler } from '../utils/asyncHandler';
 import { MESSAGES } from '../constants/messages';
-import { resolveQrImageBuffer } from '../utils/qr.util';
-import { ApiError } from '../utils/ApiError';
+import { buildLibraryScanUrl, generateQrScanPngBuffer, generateQrScanSvg } from '../utils/qr.util';
 
 export const scanController = {
   renderScanPage: (_req: Request, res: Response): void => {
@@ -31,17 +29,24 @@ export const scanController = {
 
   getQrImage: asyncHandler(async (req: Request, res: Response) => {
     const { libraryId, qrCodeId } = req.query as { libraryId: string; qrCodeId: string };
-    const library = await scanService.validateLibraryQr(libraryId, qrCodeId);
+    await scanService.validateLibraryQr(libraryId, qrCodeId);
 
-    await syncLibraryQrCodeIfNeeded(library);
-
-    if (!library.qrCodeImage) {
-      throw new ApiError(404, MESSAGES.LIBRARY_QR_NOT_FOUND);
-    }
-
-    const imageBuffer = await resolveQrImageBuffer(library.qrCodeImage);
+    const scanUrl = buildLibraryScanUrl(libraryId, qrCodeId);
+    const imageBuffer = await generateQrScanPngBuffer(scanUrl);
     res.set('Content-Type', 'image/png');
-    res.set('Cache-Control', 'public, max-age=86400');
+    res.set('Cache-Control', 'public, max-age=31536000, immutable');
     res.send(imageBuffer);
+  }),
+
+  getQrSvg: asyncHandler(async (req: Request, res: Response) => {
+    const { libraryId, qrCodeId } = req.query as { libraryId: string; qrCodeId: string };
+    await scanService.validateLibraryQr(libraryId, qrCodeId);
+
+    const scanUrl = buildLibraryScanUrl(libraryId, qrCodeId);
+    const svg = await generateQrScanSvg(scanUrl);
+    res.set('Content-Type', 'image/svg+xml; charset=utf-8');
+    res.set('Cache-Control', 'public, max-age=31536000, immutable');
+    res.set('Content-Disposition', `attachment; filename="library-qr-${qrCodeId}.svg"`);
+    res.send(svg);
   }),
 };

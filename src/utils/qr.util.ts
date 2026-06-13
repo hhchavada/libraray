@@ -5,6 +5,16 @@ import { uploadBufferToCloudinary } from './cloudinary.util';
 
 const CLOUDINARY_QR_FOLDER = 'library-qr-codes';
 
+const QR_RENDER_OPTIONS = {
+  errorCorrectionLevel: 'H' as const,
+  margin: 2,
+  width: 320,
+  color: {
+    dark: '#1e3a8a',
+    light: '#ffffff',
+  },
+};
+
 export interface LibraryQrData {
   qrCodeId: string;
   qrCodePayload: string;
@@ -22,33 +32,20 @@ export const buildLibraryQrImageUrl = (libraryId: string, qrCodeId: string): str
 export const buildLibraryQrShareUrl = (libraryId: string, qrCodeId: string): string =>
   `${ENV.APP_BASE_URL}/scan/qr?libraryId=${libraryId}&qrCodeId=${qrCodeId}`;
 
+export const buildLibraryQrSvgUrl = (libraryId: string, qrCodeId: string): string =>
+  `${ENV.APP_BASE_URL}/api/v1/public/scan/qr-svg?libraryId=${libraryId}&qrCodeId=${qrCodeId}`;
+
+/** QR is permanent — only generate once when library has no QR yet. */
 export const libraryQrNeedsRegeneration = (
-  libraryId: string,
   qrCodeId: string | undefined,
-  qrCodeImage: string | undefined,
   qrCodePayload: string | undefined
-): boolean => {
-  if (!qrCodeImage || !qrCodeId) {
-    return true;
-  }
+): boolean => !qrCodeId || !qrCodePayload;
 
-  const expectedScanUrl = buildLibraryScanUrl(libraryId, qrCodeId);
+export const generateQrScanPngBuffer = async (scanUrl: string): Promise<Buffer> =>
+  QRCode.toBuffer(scanUrl, QR_RENDER_OPTIONS);
 
-  if (!qrCodePayload?.startsWith('{')) {
-    return true;
-  }
-
-  try {
-    const payload = JSON.parse(qrCodePayload) as { scanUrl?: string };
-    if (!payload.scanUrl || payload.scanUrl !== expectedScanUrl) {
-      return true;
-    }
-  } catch {
-    return true;
-  }
-
-  return false;
-};
+export const generateQrScanSvg = async (scanUrl: string): Promise<string> =>
+  QRCode.toString(scanUrl, { ...QR_RENDER_OPTIONS, type: 'svg' });
 
 export const dataUrlToPngBuffer = (dataUrl: string): Buffer => {
   const base64 = dataUrl.replace(/\s/g, '').replace(/^data:image\/\w+;base64,/, '');
@@ -86,24 +83,19 @@ export const generateLibraryQrCode = async (
   });
 
   // Encode the URL (not JSON) so phone cameras open the registration page on scan.
-  let qrCodeImage = await QRCode.toDataURL(qrCodeScanUrl, {
-    errorCorrectionLevel: 'H',
-    margin: 2,
-    width: 320,
-    color: {
-      dark: '#1e3a8a',
-      light: '#ffffff',
-    },
-  });
+  const pngBuffer = await generateQrScanPngBuffer(qrCodeScanUrl);
 
-  qrCodeImage = qrCodeImage.replace(/\s/g, '');
-
-  const pngBuffer = dataUrlToPngBuffer(qrCodeImage);
-  const uploadResult = await uploadBufferToCloudinary(
-    pngBuffer,
-    CLOUDINARY_QR_FOLDER,
-    qrCodeId
-  );
+  let cloudinaryUrl: string | undefined;
+  try {
+    const uploadResult = await uploadBufferToCloudinary(
+      pngBuffer,
+      CLOUDINARY_QR_FOLDER,
+      qrCodeId
+    );
+    cloudinaryUrl = uploadResult.secure_url;
+  } catch (error) {
+    console.error('Cloudinary QR upload failed, continuing without remote storage:', error);
+  }
 
   const qrCodeImageUrl = buildLibraryQrImageUrl(libraryId, qrCodeId);
 
@@ -112,6 +104,6 @@ export const generateLibraryQrCode = async (
     qrCodePayload,
     qrCodeScanUrl,
     qrCodeImageUrl,
-    qrCodeImage: uploadResult.secure_url,
+    qrCodeImage: cloudinaryUrl ?? '',
   };
 };

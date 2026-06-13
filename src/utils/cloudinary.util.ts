@@ -1,12 +1,19 @@
 import { v2 as cloudinary } from 'cloudinary';
-import { ENV } from '../config/env';
 import { ApiError } from './ApiError';
 
-cloudinary.config({
-  cloud_name: ENV.CLOUDINARY_CLOUD_NAME,
-  api_key: ENV.CLOUDINARY_API_KEY,
-  api_secret: ENV.CLOUDINARY_API_SECRET,
-});
+interface CloudinaryUploadResponse {
+  secure_url: string;
+  public_id: string;
+}
+
+// Hardcoded so production does not depend on .env loading for QR uploads.
+const CLOUDINARY_CONFIG = {
+  cloud_name: 'damwrwuh4',
+  api_key: '668189856678445',
+  api_secret: 'MzMEZ7YhOaVWQjpoj1B1QBWj15M',
+};
+
+cloudinary.config(CLOUDINARY_CONFIG);
 
 export interface UploadResult {
   secure_url: string;
@@ -27,14 +34,18 @@ export const uploadBufferToCloudinary = async (
             public_id: fileName,
             resource_type: 'image',
             format: 'png',
+            overwrite: true,
+            invalidate: false,
           },
-          (error, result) => {
+          (error: Error | undefined, result: CloudinaryUploadResponse | undefined) => {
             if (error) {
               reject(error);
+            } else if (!result) {
+              reject(new Error('Cloudinary upload returned no result'));
             } else {
               resolve({
-                secure_url: result!.secure_url,
-                public_id: result!.public_id,
+                secure_url: result.secure_url,
+                public_id: result.public_id,
               });
             }
           }
