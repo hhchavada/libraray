@@ -14,6 +14,12 @@ import {
 } from '../constants/enums';
 import { seatService } from './seat.service';
 import { addMonths } from '../utils/subscription.util';
+import {
+  initialMemberStatus,
+  isMembershipExpired,
+  resolveMemberStatusOnUpdate,
+  startOfDay,
+} from '../utils/memberExpiry.util';
 
 export interface MemberFilters {
   status?: MemberStatus;
@@ -292,10 +298,11 @@ export const memberService = {
       dueAmount,
       paymentStatus,
       paymentMode: data.paymentMode,
+      status: initialMemberStatus(data.endDate),
       ...(remarksForDb(data.remarks) ? { remarks: remarksForDb(data.remarks) } : {}),
     });
 
-    if (data.seatId) {
+    if (data.seatId && member.status !== MemberStatus.EXPIRED) {
       await seatService.assignSeat(data.seatId, member._id.toString(), data.shiftType);
       member.seat = new mongoose.Types.ObjectId(data.seatId);
       await member.save();
@@ -323,6 +330,7 @@ export const memberService = {
     if (data.endDate) {
       payload.endDate = data.endDate;
     }
+    payload.status = initialMemberStatus(data.endDate);
     const remarks = remarksForDb(data.remarks);
     if (remarks) {
       payload.remarks = remarks;
@@ -363,6 +371,7 @@ export const memberService = {
       dueAmount,
       paymentStatus,
       paymentMode: data.paymentMode,
+      status: initialMemberStatus(data.endDate),
       ...(remarksForDb(data.remarks) ? { remarks: remarksForDb(data.remarks) } : {}),
     });
   },
@@ -373,6 +382,8 @@ export const memberService = {
     pagination: PaginationOptions = {},
     sort?: MemberSortOption
   ) {
+    await this.syncExpiredMembers(libraryId);
+
     const page = pagination.page ?? 1;
     const limit = pagination.limit ?? 10;
     const skip = (page - 1) * limit;
@@ -434,6 +445,19 @@ export const memberService = {
     if (!member) {
       throw new ApiError(404, MESSAGES.MEMBER_NOT_FOUND);
     }
+
+    if (
+      member.status === MemberStatus.ACTIVE &&
+      isMembershipExpired(member.endDate)
+    ) {
+      member.status = MemberStatus.EXPIRED;
+      await member.save();
+      const seatId = member.seat?.toString();
+      if (seatId) {
+        await seatService.syncSeatFromMembers(seatId);
+      }
+    }
+
     return member;
   },
 
@@ -706,6 +730,8 @@ export const memberService = {
       member.remarks = remarksForDb(data.remarks);
     }
 
+    member.status = resolveMemberStatusOnUpdate(member.endDate, member.status);
+
     await member.save();
     return member.populate('seat');
   },
@@ -760,20 +786,32 @@ export const memberService = {
     return member.populate('seat');
   },
 
-  async getExpiredMembers(libraryId: string): Promise<number> {
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
+  async syncExpiredMembers(libraryId: string): Promise<number> {
+    const today = startOfDay();
+    const query = {
+      library: libraryId,
+      status: MemberStatus.ACTIVE,
+      endDate: { $lt: today },
+    };
 
-    const result = await Member.updateMany(
-      {
-        library: libraryId,
-        endDate: { $lt: today },
-        status: MemberStatus.ACTIVE,
-      },
-      { status: MemberStatus.EXPIRED }
-    );
+    const expiredWithSeats = await Member.find(query).select('seat');
+    const seatIds = [
+      ...new Set(
+        expiredWithSeats
+          .map((member) => member.seat?.toString())
+          .filter((seatId): seatId is string => Boolean(seatId))
+      ),
+    ];
+
+    const result = await Member.updateMany(query, { $set: { status: MemberStatus.EXPIRED } });
+    await Promise.all(seatIds.map((seatId) => seatService.syncSeatFromMembers(seatId)));
 
     return result.modifiedCount;
+  },
+
+  /** @deprecated Use syncExpiredMembers */
+  async getExpiredMembers(libraryId: string): Promise<number> {
+    return this.syncExpiredMembers(libraryId);
   },
 
   /**
@@ -784,6 +822,8 @@ export const memberService = {
     members: Array<Record<string, unknown> & { daysRemaining: number }>;
     totalCount: number;
   }> {
+    await this.syncExpiredMembers(libraryId);
+
     const today = new Date();
     today.setHours(0, 0, 0, 0);
 

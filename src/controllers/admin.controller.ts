@@ -114,6 +114,16 @@ export const adminController = {
     res.status(200).json(new ApiResponse(200, MESSAGES.MEMBER_IMPORT_COMPLETED, data));
   }),
 
+  downloadMemberImportTemplate: asyncHandler(async (_req: Request, res: Response) => {
+    const buffer = await adminImportService.generateMemberImportTemplate();
+    res.setHeader(
+      'Content-Type',
+      'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+    );
+    res.setHeader('Content-Disposition', 'attachment; filename=member-import-template.xlsx');
+    res.send(buffer);
+  }),
+
   listExecutives: asyncHandler(async (_req: Request, res: Response) => {
     const data = await adminAnalyticsService.listExecutives();
     res.status(200).json(new ApiResponse(200, MESSAGES.EXECUTIVES_FETCHED, data));

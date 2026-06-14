@@ -422,8 +422,11 @@
         const libs = dash.data.libraries || [];
         const opts = libs.map(l=>`<option value="${l.libraryId}">${l.libraryName}</option>`).join('');
         return `<div class="card" style="padding:28px">
-          <h3 style="font-size:1.1rem;margin-bottom:8px">Import Students via Excel</h3>
-          <p style="color:var(--muted);font-size:.875rem;margin-bottom:24px">Required: <code>fullName</code>, <code>mobileNumber</code>, <code>shiftType</code>, <code>startDate</code> · Optional: endDate, membershipPlan, feePerMonth, amountPaid, type</p>
+          <h3 style="font-size:1.1rem;margin-bottom:8px">Import Members via Excel</h3>
+          <p style="color:var(--muted);font-size:.875rem;margin-bottom:12px">Required columns: <code>fullName</code>, <code>mobileNumber</code>, <code>shiftType</code>, <code>startDate</code>, <code>type</code></p>
+          <p style="color:var(--muted);font-size:.875rem;margin-bottom:12px">Optional columns: <code>email</code>, <code>courseName</code>, <code>endDate</code>, <code>membershipPlan</code>, <code>feePerMonth</code>, <code>discount</code>, <code>amountPaid</code>, <code>paymentStatus</code>, <code>paymentMode</code>, <code>remarks</code></p>
+          <p style="color:var(--muted);font-size:.875rem;margin-bottom:20px"><strong>type:</strong> permanent, demo, without-seat &nbsp;·&nbsp; <strong>membershipPlan:</strong> 1 Month, 2 Months, 3 Months, 6 Months, 1 Year &nbsp;·&nbsp; <strong>paymentStatus:</strong> paid, partial, unpaid &nbsp;·&nbsp; <strong>paymentMode:</strong> cash, online, upi</p>
+          <button class="btn btn-outline" id="downloadTemplateBtn" style="margin-bottom:20px">Download Excel Template</button>
           <div class="field"><label>Target Library</label><select id="importLibrary" style="width:100%;padding:12px;border:1.5px solid var(--border);border-radius:10px;font-family:inherit">${opts}</select></div>
           <div class="upload-zone" id="uploadZone" onclick="document.getElementById('importFile').click()">
             <div class="upload-icon">📂</div>
@@ -432,7 +435,7 @@
             <input type="file" id="importFile" accept=".xlsx,.xls,.csv" class="hidden" />
           </div>
           <div id="importFileName" style="margin:12px 0;color:var(--muted);font-size:.85rem"></div>
-          <button class="btn btn-primary" id="importBtn">Upload & Import Students</button>
+          <button class="btn btn-primary" id="importBtn">Upload & Import Members</button>
           <div id="importResult" style="margin-top:20px"></div>
         </div>`;
       },
@@ -460,6 +463,18 @@
         const html = await sectionLoaders[currentSection]();
         $('content').innerHTML = html;
         if (currentSection === 'import') {
+          $('downloadTemplateBtn').addEventListener('click', async () => {
+            try {
+              const res = await fetch(API + '/admin/import-members/template', { headers: { Authorization: 'Bearer ' + getToken() } });
+              if (!res.ok) throw new Error('Template download failed');
+              const blob = await res.blob();
+              const a = document.createElement('a');
+              a.href = URL.createObjectURL(blob);
+              a.download = 'member-import-template.xlsx';
+              a.click();
+              showToast('Template downloaded');
+            } catch(e) { showToast(e.message, true); }
+          });
           $('importFile').addEventListener('change', () => {
             const f = $('importFile').files[0];
             $('importFileName').textContent = f ? `Selected: ${f.name}` : '';
@@ -475,8 +490,8 @@
               const res = await fetch(API + '/admin/libraries/' + libId + '/import-members', { method: 'POST', headers: { Authorization: 'Bearer ' + getToken() }, body: fd });
               const json = await res.json();
               if (res.ok) {
-                $('importResult').innerHTML = `<div style="background:var(--success-bg);color:#059669;padding:14px;border-radius:10px">✅ Imported <strong>${json.data.imported}</strong> students · <strong>${json.data.failed}</strong> failed</div>`;
-                showToast(`Imported ${json.data.imported} students`);
+                $('importResult').innerHTML = `<div style="background:var(--success-bg);color:#059669;padding:14px;border-radius:10px">✅ Imported <strong>${json.data.imported}</strong> members · <strong>${json.data.failed}</strong> failed</div>`;
+                showToast(`Imported ${json.data.imported} members`);
               } else {
                 $('importResult').innerHTML = `<div class="alert-error">${json.message}</div>`;
               }

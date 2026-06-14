@@ -34,6 +34,7 @@ router.get('/transactions', validate(adminValidation.filters, 'query'), adminCon
 router.get('/transactions/export', validate(adminValidation.exportTransactions, 'query'), adminController.exportTransactions);
 
 // Member Excel import
+router.get('/import-members/template', adminController.downloadMemberImportTemplate);
 router.post(
   '/libraries/:libraryId/import-members',
   validate(adminValidation.libraryIdParam, 'params'),

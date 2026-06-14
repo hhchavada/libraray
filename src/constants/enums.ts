@@ -79,15 +79,32 @@ const MEMBERSHIP_PLAN_ALIASES: Record<string, MembershipPlan> = {
   '1_year': MembershipPlan.ONE_YEAR,
   '1_years': MembershipPlan.ONE_YEAR,
   '1year': MembershipPlan.ONE_YEAR,
-  // legacy values
+  // Excel / display labels
+  '1-month': MembershipPlan.ONE_MONTH,
+  '2-months': MembershipPlan.TWO_MONTHS,
+  '2-month': MembershipPlan.TWO_MONTHS,
+  '3-months': MembershipPlan.THREE_MONTHS,
+  '3-month': MembershipPlan.THREE_MONTHS,
+  '6-months': MembershipPlan.SIX_MONTHS,
+  '6-month': MembershipPlan.SIX_MONTHS,
+  '1-year': MembershipPlan.ONE_YEAR,
   monthly: MembershipPlan.ONE_MONTH,
+  '2 months': MembershipPlan.TWO_MONTHS,
   quarterly: MembershipPlan.THREE_MONTHS,
   half_yearly: MembershipPlan.SIX_MONTHS,
+  halfyearly: MembershipPlan.SIX_MONTHS,
+  'half-yearly': MembershipPlan.SIX_MONTHS,
+  'half yearly': MembershipPlan.SIX_MONTHS,
   yearly: MembershipPlan.ONE_YEAR,
 };
 
 export const normalizeMembershipPlan = (value: string): MembershipPlan | null => {
-  const key = value.trim().toLowerCase().replace(/\s+/g, '_');
+  const trimmed = value.trim().toLowerCase();
+  if (MEMBERSHIP_PLAN_ALIASES[trimmed]) {
+    return MEMBERSHIP_PLAN_ALIASES[trimmed];
+  }
+
+  const key = trimmed.replace(/\s+/g, '_').replace(/-/g, '_');
   if (MEMBERSHIP_PLAN_ALIASES[key]) {
     return MEMBERSHIP_PLAN_ALIASES[key];
   }
