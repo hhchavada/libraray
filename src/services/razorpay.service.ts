@@ -23,21 +23,24 @@ export const getRazorpayClient = (): Razorpay => {
   return razorpayInstance;
 };
 
-export interface CreateOrderInput {
+export interface CreateRazorpayPlanInput {
+  name: string;
   amountInRupees: number;
   currency?: string;
-  receipt: string;
+  intervalMonths: number;
   notes?: Record<string, string>;
 }
 
-export interface CreatePaymentLinkInput {
-  amountInRupees: number;
-  currency?: string;
-  description: string;
-  referenceId: string;
-  customer: { name: string; email: string; contact: string };
+export interface CreateRazorpayCustomerInput {
+  name: string;
+  email: string;
+  contact: string;
+}
+
+export interface CreateRazorpaySubscriptionInput {
+  planId: string;
+  customerId?: string;
   notes?: Record<string, string>;
-  callbackUrl?: string;
 }
 
 /** Format Indian mobile for Razorpay (e.g. +919876543210). */
@@ -57,34 +60,113 @@ export const razorpayService = {
     return ENV.RAZORPAY_KEY_ID;
   },
 
-  async createOrder(input: CreateOrderInput) {
+  async createPlan(input: CreateRazorpayPlanInput) {
     const currency = input.currency ?? 'INR';
     const amount = toRupeesPaise(input.amountInRupees);
 
-    logger.info(LOG_TAG, 'Creating order', {
-      receipt: input.receipt,
+    logger.info(LOG_TAG, 'Creating recurring plan', {
+      name: input.name,
       amount,
-      currency,
+      intervalMonths: input.intervalMonths,
     });
 
-    const order = await getRazorpayClient().orders.create({
-      amount,
-      currency,
-      receipt: input.receipt,
+    const plan = await getRazorpayClient().plans.create({
+      period: 'monthly',
+      interval: input.intervalMonths,
+      item: {
+        name: input.name,
+        amount,
+        currency,
+        description: `${input.name} — auto-renewing`,
+      },
       notes: input.notes,
     });
 
-    logger.info(LOG_TAG, 'Order created', { orderId: order.id, amount: order.amount });
-
-    return order;
+    logger.info(LOG_TAG, 'Recurring plan created', { planId: plan.id });
+    return plan;
   },
 
-  verifyPaymentSignature(
-    razorpayOrderId: string,
+  async fetchPlan(planId: string) {
+    return getRazorpayClient().plans.fetch(planId);
+  },
+
+  async findOrCreateCustomer(input: CreateRazorpayCustomerInput) {
+    const client = getRazorpayClient();
+
+    const existing = (await client.customers.all({ count: 10 })) as {
+      items?: Array<{ id: string; email?: string }>;
+    };
+    const match = existing.items?.find(
+      (c) => c.email?.toLowerCase() === input.email.toLowerCase()
+    );
+    if (match) {
+      return match;
+    }
+
+    logger.info(LOG_TAG, 'Creating Razorpay customer', { email: input.email });
+
+    return client.customers.create({
+      name: input.name,
+      email: input.email,
+      contact: input.contact,
+      fail_existing: 0,
+    });
+  },
+
+  async createSubscription(input: CreateRazorpaySubscriptionInput) {
+    logger.info(LOG_TAG, 'Creating recurring subscription', {
+      planId: input.planId,
+      customerId: input.customerId,
+    });
+
+    const payload: {
+      plan_id: string;
+      total_count: number;
+      customer_notify: 0 | 1;
+      notes?: Record<string, string>;
+      customer_id?: string;
+    } = {
+      plan_id: input.planId,
+      // High cycle count — effectively runs until user/admin cancels.
+      total_count: 1200,
+      customer_notify: 1,
+      notes: input.notes,
+    };
+
+    if (input.customerId) {
+      payload.customer_id = input.customerId;
+    }
+
+    const subscription = (await getRazorpayClient().subscriptions.create(
+      payload
+    )) as unknown as { id: string; short_url: string };
+
+    logger.info(LOG_TAG, 'Recurring subscription created', {
+      subscriptionId: subscription.id,
+      shortUrl: subscription.short_url,
+    });
+
+    return subscription;
+  },
+
+  async cancelSubscription(razorpaySubscriptionId: string, cancelAtCycleEnd = false) {
+    logger.info(LOG_TAG, 'Cancelling Razorpay subscription', {
+      subscriptionId: razorpaySubscriptionId,
+      cancelAtCycleEnd,
+    });
+
+    return getRazorpayClient().subscriptions.cancel(
+      razorpaySubscriptionId,
+      cancelAtCycleEnd
+    );
+  },
+
+  verifySubscriptionPaymentSignature(
     razorpayPaymentId: string,
+    razorpaySubscriptionId: string,
     razorpaySignature: string
   ): boolean {
-    const body = `${razorpayOrderId}|${razorpayPaymentId}`;
+    const body = `${razorpayPaymentId}|${razorpaySubscriptionId}`;
     const expected = crypto
       .createHmac('sha256', ENV.RAZORPAY_KEY_SECRET)
       .update(body)
@@ -93,8 +175,8 @@ export const razorpayService = {
     const isValid = expected === razorpaySignature;
 
     if (!isValid) {
-      logger.warn(LOG_TAG, 'Signature verification failed', {
-        orderId: razorpayOrderId,
+      logger.warn(LOG_TAG, 'Subscription signature verification failed', {
+        subscriptionId: razorpaySubscriptionId,
         paymentId: razorpayPaymentId,
       });
     }
@@ -102,50 +184,21 @@ export const razorpayService = {
     return isValid;
   },
 
-  async createPaymentLink(input: CreatePaymentLinkInput) {
-    const currency = input.currency ?? 'INR';
-    const amount = toRupeesPaise(input.amountInRupees);
+  verifyWebhookSignature(rawBody: string, signature: string): boolean {
+    if (!ENV.RAZORPAY_WEBHOOK_SECRET) {
+      logger.warn(LOG_TAG, 'RAZORPAY_WEBHOOK_SECRET not set — skipping verification');
+      return ENV.NODE_ENV !== 'production';
+    }
 
-    logger.info(LOG_TAG, 'Creating payment link', {
-      referenceId: input.referenceId,
-      amount,
-    });
-
-    const paymentLink = await getRazorpayClient().paymentLink.create({
-      amount,
-      currency,
-      accept_partial: false,
-      description: input.description,
-      reference_id: input.referenceId,
-      customer: input.customer,
-      notify: { sms: false, email: false },
-      reminder_enable: false,
-      notes: input.notes,
-      callback_url: input.callbackUrl,
-      callback_method: input.callbackUrl ? 'get' : undefined,
-    });
-
-    logger.info(LOG_TAG, 'Payment link created', {
-      id: paymentLink.id,
-      short_url: paymentLink.short_url,
-    });
-
-    return paymentLink;
-  },
-
-  /** Razorpay Payment Link redirect callback signature. */
-  verifyPaymentLinkSignature(
-    paymentLinkId: string,
-    referenceId: string,
-    status: string,
-    paymentId: string,
-    signature: string
-  ): boolean {
-    const body = `${paymentLinkId}|${referenceId}|${status}|${paymentId}`;
-    const expected = crypto
-      .createHmac('sha256', ENV.RAZORPAY_KEY_SECRET)
-      .update(body)
-      .digest('hex');
-    return expected === signature;
+    try {
+      return Razorpay.validateWebhookSignature(
+        rawBody,
+        signature,
+        ENV.RAZORPAY_WEBHOOK_SECRET
+      );
+    } catch (err) {
+      logger.warn(LOG_TAG, 'Webhook signature verification failed', { err });
+      return false;
+    }
   },
 };

@@ -17,6 +17,8 @@ export interface ISubscriptionPlan {
   /** Effective monthly cost under the discounted plan */
   perMonthAmount: number;
   currency: string;
+  /** Razorpay recurring plan id (synced on seed). */
+  razorpayPlanId?: string;
   isActive: boolean;
   createdAt: Date;
   updatedAt: Date;
@@ -81,6 +83,11 @@ const subscriptionPlanSchema = new Schema<ISubscriptionPlanDocument>(
       type: String,
       default: 'INR',
       uppercase: true,
+    },
+    razorpayPlanId: {
+      type: String,
+      trim: true,
+      sparse: true,
     },
     isActive: {
       type: Boolean,

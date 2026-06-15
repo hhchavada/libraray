@@ -4,10 +4,14 @@ import { LibrarySubscriptionStatus, SubscriptionPaymentStatus } from '../constan
 export interface ISubscription {
   userId: Types.ObjectId;
   planId: Types.ObjectId;
-  razorpayOrderId: string;
+  razorpayOrderId?: string;
+  razorpaySubscriptionId?: string;
+  razorpayCustomerId?: string;
   razorpayPaymentLinkId?: string;
   razorpayPaymentId?: string;
   razorpaySignature?: string;
+  /** Auto-debit via Razorpay Subscriptions (mandate). */
+  isRecurring: boolean;
   amount: number;
   taxableAmount?: number;
   gstAmount?: number;
@@ -43,7 +47,15 @@ const subscriptionSchema = new Schema<ISubscriptionDocument>(
     },
     razorpayOrderId: {
       type: String,
-      required: true,
+      trim: true,
+    },
+    razorpaySubscriptionId: {
+      type: String,
+      trim: true,
+      index: true,
+    },
+    razorpayCustomerId: {
+      type: String,
       trim: true,
     },
     razorpayPaymentLinkId: {
@@ -85,6 +97,10 @@ const subscriptionSchema = new Schema<ISubscriptionDocument>(
       enum: Object.values(SubscriptionPaymentStatus),
       default: SubscriptionPaymentStatus.PENDING,
     },
+    isRecurring: {
+      type: Boolean,
+      default: true,
+    },
     isExtension: {
       type: Boolean,
       default: false,
@@ -100,7 +116,20 @@ const subscriptionSchema = new Schema<ISubscriptionDocument>(
 );
 
 subscriptionSchema.index({ userId: 1, status: 1 });
-subscriptionSchema.index({ razorpayOrderId: 1 }, { unique: true });
+subscriptionSchema.index(
+  { razorpayOrderId: 1 },
+  {
+    unique: true,
+    partialFilterExpression: { razorpayOrderId: { $type: 'string' } },
+  }
+);
+subscriptionSchema.index(
+  { razorpaySubscriptionId: 1 },
+  {
+    unique: true,
+    partialFilterExpression: { razorpaySubscriptionId: { $type: 'string' } },
+  }
+);
 subscriptionSchema.index(
   { razorpayPaymentId: 1 },
   {

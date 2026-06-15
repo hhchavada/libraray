@@ -13,7 +13,7 @@ export const subscriptionValidation = {
   }),
 
   verifyPayment: Joi.object({
-    razorpay_order_id: Joi.string().required(),
+    razorpay_subscription_id: Joi.string().required(),
     razorpay_payment_id: Joi.string().required(),
     razorpay_signature: Joi.string().required(),
   }),

@@ -5,7 +5,6 @@ import {
 } from '../models/subscriptionPlan.model';
 import { Subscription, ISubscriptionDocument } from '../models/subscription.model';
 import { User } from '../models/user.model';
-import { ENV } from '../config/env';
 import { ApiError } from '../utils/ApiError';
 import { MESSAGES } from '../constants/messages';
 import {
@@ -18,13 +17,69 @@ import {
   SUBSCRIPTION_PLANS_SEED,
 } from '../constants/subscriptionPlans.data';
 import { formatRazorpayContact, razorpayService } from './razorpay.service';
-import { addMonths } from '../utils/subscription.util';
+import { addMonths, toRupeesPaise } from '../utils/subscription.util';
 import { calculateGstBreakdown } from '../utils/gst.util';
 import { logger } from '../utils/logger';
 
 const LOG_TAG = 'Subscription';
 
 export type GroupedPlans = Record<string, ISubscriptionPlanDocument[]>;
+
+interface RazorpayWebhookEntity {
+  id: string;
+  notes?: Record<string, string>;
+  plan_id?: string;
+  status?: string;
+}
+
+interface RazorpayWebhookPayload {
+  subscription?: { entity: RazorpayWebhookEntity };
+  payment?: { entity: { id: string } };
+}
+
+interface RazorpayWebhookEvent {
+  event: string;
+  payload: RazorpayWebhookPayload;
+}
+
+const ensureRazorpayPlan = async (
+  plan: ISubscriptionPlanDocument
+): Promise<string> => {
+  if (plan.razorpayPlanId) {
+    try {
+      const existing = await razorpayService.fetchPlan(plan.razorpayPlanId);
+      const existingAmount = Number((existing as { item?: { amount?: number } }).item?.amount);
+      if (existingAmount === toRupeesPaise(plan.amount)) {
+        return plan.razorpayPlanId;
+      }
+      logger.info(LOG_TAG, 'Plan amount changed — creating new Razorpay plan', {
+        planId: plan._id,
+        oldRazorpayPlanId: plan.razorpayPlanId,
+      });
+    } catch {
+      logger.warn(LOG_TAG, 'Stored Razorpay plan not found — recreating', {
+        razorpayPlanId: plan.razorpayPlanId,
+      });
+    }
+  }
+
+  const razorpayPlan = await razorpayService.createPlan({
+    name: plan.name,
+    amountInRupees: plan.amount,
+    currency: plan.currency,
+    intervalMonths: plan.durationMonths,
+    notes: {
+      mongoPlanId: String(plan._id),
+      category: plan.category,
+      durationType: plan.durationType,
+    },
+  });
+
+  plan.razorpayPlanId = razorpayPlan.id;
+  await plan.save();
+
+  return razorpayPlan.id;
+};
 
 export const subscriptionService = {
   async getPlansGrouped(): Promise<GroupedPlans> {
@@ -61,7 +116,6 @@ export const subscriptionService = {
       return active;
     }
 
-    // Mark expired actives
     await Subscription.updateMany(
       {
         userId,
@@ -147,18 +201,104 @@ export const subscriptionService = {
     return subscription.populate('planId');
   },
 
+  async processRecurringCharge(
+    razorpaySubscriptionId: string,
+    razorpayPaymentId: string
+  ): Promise<ISubscriptionDocument | null> {
+    if (!razorpayPaymentId) {
+      logger.warn(LOG_TAG, 'Recurring charge without payment id', { razorpaySubscriptionId });
+      return null;
+    }
+
+    const duplicatePayment = await Subscription.findOne({
+      razorpayPaymentId,
+      paymentStatus: SubscriptionPaymentStatus.PAID,
+    });
+    if (duplicatePayment) {
+      logger.info(LOG_TAG, 'Idempotent recurring charge — already processed', {
+        paymentId: razorpayPaymentId,
+      });
+      return duplicatePayment.populate('planId');
+    }
+
+    const pending = await Subscription.findOne({
+      razorpaySubscriptionId,
+      paymentStatus: SubscriptionPaymentStatus.PENDING,
+    }).sort({ createdAt: -1 });
+
+    if (pending) {
+      return this.activateSubscription(pending, razorpayPaymentId);
+    }
+
+    const active = await Subscription.findOne({
+      razorpaySubscriptionId,
+      status: LibrarySubscriptionStatus.ACTIVE,
+      paymentStatus: SubscriptionPaymentStatus.PAID,
+    }).sort({ endDate: -1 });
+
+    if (!active) {
+      logger.warn(LOG_TAG, 'Recurring charge — no matching subscription', {
+        razorpaySubscriptionId,
+      });
+      return null;
+    }
+
+    const plan = await SubscriptionPlan.findById(active.planId);
+    if (!plan) {
+      throw new ApiError(500, MESSAGES.SUBSCRIPTION_PLAN_NOT_FOUND);
+    }
+
+    const now = new Date();
+    const base = active.endDate && active.endDate > now ? active.endDate : now;
+    const startDate = base;
+    const endDate = addMonths(base, plan.durationMonths);
+    const gst = calculateGstBreakdown(plan.amount);
+
+    active.status = LibrarySubscriptionStatus.EXPIRED;
+    await active.save();
+
+    const renewal = await Subscription.create({
+      userId: active.userId,
+      planId: active.planId,
+      razorpaySubscriptionId,
+      razorpayCustomerId: active.razorpayCustomerId,
+      razorpayPaymentId,
+      amount: plan.amount,
+      taxableAmount: gst.taxableAmount,
+      gstAmount: gst.gstAmount,
+      razorpayFee: gst.razorpayFee,
+      razorpayGst: gst.razorpayGst,
+      netSettlementAmount: gst.netSettlementAmount,
+      startDate,
+      endDate,
+      status: LibrarySubscriptionStatus.ACTIVE,
+      paymentStatus: SubscriptionPaymentStatus.PAID,
+      isRecurring: true,
+      isExtension: true,
+      replacedPrevious: false,
+    });
+
+    logger.info(LOG_TAG, 'Subscription renewed via auto-debit', {
+      subscriptionId: renewal._id,
+      razorpaySubscriptionId,
+      endDate,
+    });
+
+    return renewal.populate('planId');
+  },
+
   async createOrder(
     userId: string,
     planId: string,
     confirmReplace = false
   ): Promise<{
-    orderId: string;
+    razorpaySubscriptionId: string;
     amount: number;
     currency: string;
     key: string;
     subscriptionId: string;
     paymentUrl: string;
-    paymentLinkId: string;
+    isRecurring: true;
   }> {
     if (!mongoose.Types.ObjectId.isValid(planId)) {
       throw new ApiError(400, MESSAGES.VALIDATION_ERROR);
@@ -175,18 +315,29 @@ export const subscriptionService = {
     }
 
     const active = await this.findActiveSubscription(userId);
-    let isExtension = false;
 
     if (active) {
       const activePlanId = String(active.planId);
-      if (activePlanId === String(plan._id)) {
-        isExtension = true;
-      } else if (!confirmReplace) {
+      if (activePlanId === String(plan._id) && active.razorpaySubscriptionId) {
+        throw new ApiError(409, MESSAGES.SUBSCRIPTION_ALREADY_RECURRING);
+      }
+      if (activePlanId !== String(plan._id) && !confirmReplace) {
         throw new ApiError(409, MESSAGES.SUBSCRIPTION_REPLACE_CONFIRMATION_REQUIRED);
+      }
+      if (active.razorpaySubscriptionId) {
+        try {
+          await razorpayService.cancelSubscription(active.razorpaySubscriptionId, false);
+        } catch (err) {
+          logger.warn(LOG_TAG, 'Could not cancel previous Razorpay subscription', {
+            razorpaySubscriptionId: active.razorpaySubscriptionId,
+            err,
+          });
+        }
+        active.status = LibrarySubscriptionStatus.CANCELLED;
+        await active.save();
       }
     }
 
-    // Cancel stale pending orders for this user
     await Subscription.updateMany(
       {
         userId,
@@ -196,113 +347,61 @@ export const subscriptionService = {
       { $set: { status: LibrarySubscriptionStatus.CANCELLED } }
     );
 
-    const receipt = `sub_${userId.slice(-6)}_${Date.now()}`;
-    const order = await razorpayService.createOrder({
-      amountInRupees: plan.amount,
-      currency: plan.currency,
-      receipt,
-      notes: {
-        userId,
-        planId: String(plan._id),
-        category: plan.category,
-        durationType: plan.durationType,
-      },
+    const razorpayPlanId = await ensureRazorpayPlan(plan);
+
+    const customer = await razorpayService.findOrCreateCustomer({
+      name: user.fullName,
+      email: user.email,
+      contact: formatRazorpayContact(user.mobileNumber),
     });
 
     const subscription = await Subscription.create({
       userId,
       planId: plan._id,
-      razorpayOrderId: order.id,
       amount: plan.amount,
       status: LibrarySubscriptionStatus.PENDING,
       paymentStatus: SubscriptionPaymentStatus.PENDING,
-      isExtension,
-      replacedPrevious: Boolean(active && !isExtension),
+      isRecurring: true,
+      isExtension: false,
+      replacedPrevious: Boolean(active),
     });
 
-    const paymentLink = await razorpayService.createPaymentLink({
-      amountInRupees: plan.amount,
-      currency: plan.currency,
-      description: plan.name,
-      referenceId: subscription._id.toString(),
-      customer: {
-        name: user.fullName,
-        email: user.email,
-        contact: formatRazorpayContact(user.mobileNumber),
-      },
+    const razorpaySub = await razorpayService.createSubscription({
+      planId: razorpayPlanId,
+      customerId: customer.id,
       notes: {
         userId,
         planId: String(plan._id),
-        razorpayOrderId: order.id,
         subscriptionId: subscription._id.toString(),
       },
-      callbackUrl: ENV.RAZORPAY_PAYMENT_CALLBACK_URL,
     });
 
-    subscription.razorpayPaymentLinkId = paymentLink.id;
+    subscription.razorpaySubscriptionId = razorpaySub.id;
+    subscription.razorpayCustomerId = customer.id;
     await subscription.save();
 
-    logger.info(LOG_TAG, 'Pending subscription created', {
+    logger.info(LOG_TAG, 'Pending recurring subscription created', {
       subscriptionId: subscription._id,
-      orderId: order.id,
-      paymentLinkId: paymentLink.id,
+      razorpaySubscriptionId: razorpaySub.id,
       userId,
-      isExtension,
     });
 
     return {
-      orderId: order.id,
-      amount: Number(order.amount),
-      currency: order.currency ?? 'INR',
+      razorpaySubscriptionId: razorpaySub.id,
+      amount: toRupeesPaise(plan.amount),
+      currency: plan.currency ?? 'INR',
       key: razorpayService.getPublicKey(),
       subscriptionId: subscription._id.toString(),
-      paymentUrl: paymentLink.short_url,
-      paymentLinkId: paymentLink.id,
+      paymentUrl: razorpaySub.short_url,
+      isRecurring: true,
     };
-  },
-
-  /** Razorpay Payment Link redirect (GET) — activates subscription after successful payment. */
-  async handlePaymentLinkCallback(query: Record<string, string | undefined>) {
-    const paymentId = query.razorpay_payment_id;
-    const paymentLinkId = query.razorpay_payment_link_id;
-    const referenceId = query.razorpay_payment_link_reference_id ?? '';
-    const status = query.razorpay_payment_link_status ?? '';
-    const signature = query.razorpay_signature;
-
-    if (!paymentId || !paymentLinkId || !signature) {
-      throw new ApiError(400, MESSAGES.VALIDATION_ERROR);
-    }
-
-    if (status !== 'paid') {
-      throw new ApiError(400, MESSAGES.SUBSCRIPTION_PAYMENT_FAILED);
-    }
-
-    const isValid = razorpayService.verifyPaymentLinkSignature(
-      paymentLinkId,
-      referenceId,
-      status,
-      paymentId,
-      signature
-    );
-    if (!isValid) {
-      throw new ApiError(400, MESSAGES.SUBSCRIPTION_INVALID_SIGNATURE);
-    }
-
-    const subscription = await Subscription.findOne({
-      razorpayPaymentLinkId: paymentLinkId,
-    });
-    if (!subscription) {
-      throw new ApiError(404, MESSAGES.SUBSCRIPTION_ORDER_NOT_FOUND);
-    }
-
-    return this.activateSubscription(subscription, paymentId, signature);
   },
 
   async verifyPayment(
     userId: string,
-    razorpayOrderId: string,
     razorpayPaymentId: string,
-    razorpaySignature: string
+    razorpaySignature: string,
+    razorpaySubscriptionId?: string
   ): Promise<ISubscriptionDocument> {
     const duplicatePayment = await Subscription.findOne({
       razorpayPaymentId,
@@ -319,8 +418,12 @@ export const subscriptionService = {
       throw new ApiError(409, MESSAGES.SUBSCRIPTION_DUPLICATE_PAYMENT);
     }
 
+    if (!razorpaySubscriptionId) {
+      throw new ApiError(400, MESSAGES.VALIDATION_ERROR);
+    }
+
     const subscription = await Subscription.findOne({
-      razorpayOrderId,
+      razorpaySubscriptionId,
       userId,
     }).populate('planId');
 
@@ -332,9 +435,9 @@ export const subscriptionService = {
       return subscription;
     }
 
-    const isValid = razorpayService.verifyPaymentSignature(
-      razorpayOrderId,
+    const isValid = razorpayService.verifySubscriptionPaymentSignature(
       razorpayPaymentId,
+      razorpaySubscriptionId,
       razorpaySignature
     );
 
@@ -345,6 +448,60 @@ export const subscriptionService = {
     }
 
     return this.activateSubscription(subscription, razorpayPaymentId, razorpaySignature);
+  },
+
+  async handleWebhook(rawBody: string, signature: string | undefined): Promise<void> {
+    if (!signature) {
+      throw new ApiError(400, MESSAGES.SUBSCRIPTION_INVALID_SIGNATURE);
+    }
+
+    if (!razorpayService.verifyWebhookSignature(rawBody, signature)) {
+      throw new ApiError(400, MESSAGES.SUBSCRIPTION_INVALID_SIGNATURE);
+    }
+
+    const event = JSON.parse(rawBody) as RazorpayWebhookEvent;
+    const eventName = event.event;
+    const subEntity = event.payload?.subscription?.entity;
+    const paymentEntity = event.payload?.payment?.entity;
+
+    logger.info(LOG_TAG, 'Webhook received', { event: eventName, subscriptionId: subEntity?.id });
+
+    switch (eventName) {
+      case 'subscription.authenticated':
+      case 'subscription.activated':
+      case 'subscription.charged':
+        if (subEntity?.id && paymentEntity?.id) {
+          await this.processRecurringCharge(subEntity.id, paymentEntity.id);
+        }
+        break;
+
+      case 'subscription.halted':
+      case 'subscription.cancelled':
+      case 'subscription.completed':
+        if (subEntity?.id) {
+          await this.handleRecurringEnded(subEntity.id, eventName);
+        }
+        break;
+
+      default:
+        logger.info(LOG_TAG, 'Unhandled webhook event', { event: eventName });
+    }
+  },
+
+  async handleRecurringEnded(razorpaySubscriptionId: string, reason: string): Promise<void> {
+    const result = await Subscription.updateMany(
+      {
+        razorpaySubscriptionId,
+        status: { $in: [LibrarySubscriptionStatus.ACTIVE, LibrarySubscriptionStatus.PENDING] },
+      },
+      { $set: { status: LibrarySubscriptionStatus.CANCELLED } }
+    );
+
+    logger.info(LOG_TAG, 'Recurring subscription ended', {
+      razorpaySubscriptionId,
+      reason,
+      modified: result.modifiedCount,
+    });
   },
 
   async getCurrentSubscription(userId: string) {
@@ -362,7 +519,9 @@ export const subscriptionService = {
   async adminCreatePlan(
     payload: Partial<ISubscriptionPlanDocument>
   ): Promise<ISubscriptionPlanDocument> {
-    return SubscriptionPlan.create(payload);
+    const plan = await SubscriptionPlan.create(payload);
+    await ensureRazorpayPlan(plan);
+    return plan;
   },
 
   async adminUpdatePlan(
@@ -378,6 +537,9 @@ export const subscriptionService = {
     });
     if (!plan) {
       throw new ApiError(404, MESSAGES.SUBSCRIPTION_PLAN_NOT_FOUND);
+    }
+    if (payload.amount !== undefined || payload.durationMonths !== undefined) {
+      await ensureRazorpayPlan(plan);
     }
     return plan;
   },
@@ -400,10 +562,6 @@ export const subscriptionService = {
       .populate('userId', 'fullName email mobileNumber');
   },
 
-  /**
-   * Drops indexes/rows from the old SubscriptionPlan schema (planType, razorpayPlanId).
-   * Required once when upgrading an existing database.
-   */
   async migrateLegacySubscriptionPlans(): Promise<void> {
     const collection = SubscriptionPlan.collection;
     const indexes = await collection.indexes();
@@ -413,8 +571,7 @@ export const subscriptionService = {
       if (!name || name === '_id_') continue;
 
       const keys = index.key as Record<string, number>;
-      const isLegacyKey =
-        'planType' in keys || 'razorpayPlanId' in keys || name === 'planType_1';
+      const isLegacyKey = 'planType' in keys || name === 'planType_1';
 
       if (isLegacyKey) {
         try {
@@ -450,7 +607,7 @@ export const subscriptionService = {
         durationType: seed.durationType,
       });
 
-      await SubscriptionPlan.findOneAndUpdate(
+      const plan = await SubscriptionPlan.findOneAndUpdate(
         { category: seed.category, durationType: seed.durationType },
         {
           $set: {
@@ -467,7 +624,6 @@ export const subscriptionService = {
           },
           $unset: {
             planType: '',
-            razorpayPlanId: '',
             price: '',
             interval: '',
             intervalType: '',
@@ -475,8 +631,12 @@ export const subscriptionService = {
             features: '',
           },
         },
-        { upsert: true }
+        { upsert: true, new: true }
       );
+
+      if (plan) {
+        await ensureRazorpayPlan(plan);
+      }
 
       if (exists) {
         updated += 1;

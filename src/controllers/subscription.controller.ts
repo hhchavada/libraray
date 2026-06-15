@@ -23,12 +23,12 @@ export const subscriptionController = {
   }),
 
   verifyPayment: asyncHandler(async (req: Request, res: Response) => {
-    const { razorpay_order_id, razorpay_payment_id, razorpay_signature } = req.body;
+    const { razorpay_subscription_id, razorpay_payment_id, razorpay_signature } = req.body;
     const subscription = await subscriptionService.verifyPayment(
       getAuthUserId(req),
-      razorpay_order_id,
       razorpay_payment_id,
-      razorpay_signature
+      razorpay_signature,
+      razorpay_subscription_id
     );
     res.status(200).json(new ApiResponse(200, MESSAGES.SUBSCRIPTION_ACTIVATED, subscription));
   }),
@@ -52,22 +52,16 @@ export const subscriptionController = {
     res.status(200).json(new ApiResponse(200, MESSAGES.SUBSCRIPTION_HISTORY_FETCHED, history));
   }),
 
-  /** Razorpay Payment Link redirect — no auth (signature verified). */
-  paymentCallback: asyncHandler(async (req: Request, res: Response) => {
-    const subscription = await subscriptionService.handlePaymentLinkCallback(
-      req.query as Record<string, string | undefined>
-    );
-    const plan = subscription.planId as { name?: string } | null;
-    const end = subscription.endDate
-      ? new Date(subscription.endDate).toLocaleDateString('en-IN')
-      : '—';
+  /** Razorpay webhook — no auth (HMAC verified). Requires raw body middleware. */
+  webhook: asyncHandler(async (req: Request, res: Response) => {
+    const rawBody =
+      typeof req.body === 'string'
+        ? req.body
+        : Buffer.isBuffer(req.body)
+          ? req.body.toString('utf8')
+          : JSON.stringify(req.body);
 
-    res.status(200).send(
-      `<!DOCTYPE html><html><head><meta charset="utf-8"/><title>Payment successful</title></head>` +
-        `<body style="font-family:system-ui;text-align:center;padding:48px">` +
-        `<h1>Payment successful</h1>` +
-        `<p>${plan?.name ?? 'Subscription'} is active until <strong>${end}</strong>.</p>` +
-        `<p style="color:#64748b;font-size:14px">You can close this window.</p></body></html>`
-    );
+    await subscriptionService.handleWebhook(rawBody, req.headers['x-razorpay-signature'] as string);
+    res.status(200).json({ status: 'ok' });
   }),
 };

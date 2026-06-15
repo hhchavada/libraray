@@ -127,13 +127,15 @@ export const MESSAGES = {
   REPORT_EXPORTED: 'Report exported successfully',
 
   // Subscription
-  SUBSCRIPTION_ORDER_CREATED: 'Razorpay order created successfully',
+  SUBSCRIPTION_ORDER_CREATED: 'Razorpay recurring subscription created successfully',
   SUBSCRIPTION_ACTIVATED: 'Subscription activated successfully',
   SUBSCRIPTION_CANCELLED: 'Subscription cancelled successfully',
   SUBSCRIPTION_NOT_FOUND: 'Subscription not found',
   SUBSCRIPTION_ORDER_NOT_FOUND: 'Subscription order not found',
   SUBSCRIPTION_REPLACE_CONFIRMATION_REQUIRED:
     'You already have an active subscription. Set confirmReplace to true to switch plans.',
+  SUBSCRIPTION_ALREADY_RECURRING:
+    'You already have an active auto-renewing subscription on this plan. Payment will be deducted automatically.',
   SUBSCRIPTION_PAYMENT_FAILED: 'Subscription payment failed',
   SUBSCRIPTION_INVALID_SIGNATURE: 'Invalid payment signature',
   SUBSCRIPTION_DUPLICATE_PAYMENT: 'This payment has already been processed',
