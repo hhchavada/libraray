@@ -318,4 +318,20 @@ export const seatService = {
 
     return seat;
   },
+
+  async getSeatByNumber(libraryId: string, seatNumber: number): Promise<ISeatDocument> {
+    if (!mongoose.Types.ObjectId.isValid(libraryId)) {
+      throw new ApiError(400, MESSAGES.VALIDATION_ERROR);
+    }
+    if (!Number.isInteger(seatNumber) || seatNumber < 1) {
+      throw new ApiError(400, MESSAGES.INVALID_SEAT_ID);
+    }
+
+    const seat = await Seat.findOne({ library: libraryId, seatNumber });
+    if (!seat) {
+      throw new ApiError(404, MESSAGES.SEAT_NOT_FOUND);
+    }
+
+    return seat;
+  },
 };

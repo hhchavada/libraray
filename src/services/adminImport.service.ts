@@ -2,12 +2,16 @@ import ExcelJS from 'exceljs';
 import { ApiError } from '../utils/ApiError';
 import { MESSAGES } from '../constants/messages';
 import { memberService, CreateMemberType } from './member.service';
+import { seatService } from './seat.service';
 import {
   PaymentMode,
   PaymentStatus,
   ShiftType,
+  MembershipPlan,
+  MEMBERSHIP_PLAN_MONTHS,
   normalizeMembershipPlan,
 } from '../constants/enums';
+import { addMonths } from '../utils/subscription.util';
 
 const REQUIRED_COLUMNS = ['fullName', 'mobileNumber', 'shiftType', 'startDate', 'type'] as const;
 
@@ -25,6 +29,7 @@ export const MEMBER_IMPORT_COLUMNS = [
   'amountPaid',
   'paymentStatus',
   'paymentMode',
+  'seatNumber',
   'remarks',
   'type',
 ] as const;
@@ -44,6 +49,7 @@ const SAMPLE_ROWS: Record<(typeof MEMBER_IMPORT_COLUMNS)[number], string | numbe
     amountPaid: 500,
     paymentStatus: 'paid',
     paymentMode: 'cash',
+    seatNumber: 19,
     remarks: '',
     type: 'permanent',
   },
@@ -61,6 +67,7 @@ const SAMPLE_ROWS: Record<(typeof MEMBER_IMPORT_COLUMNS)[number], string | numbe
     amountPaid: '',
     paymentStatus: '',
     paymentMode: '',
+    seatNumber: 5,
     remarks: 'Demo student',
     type: 'demo',
   },
@@ -78,6 +85,7 @@ const SAMPLE_ROWS: Record<(typeof MEMBER_IMPORT_COLUMNS)[number], string | numbe
     amountPaid: 1650,
     paymentStatus: 'partial',
     paymentMode: 'upi',
+    seatNumber: '',
     remarks: '',
     type: 'without-seat',
   },
@@ -112,6 +120,9 @@ const headerMap: Record<string, string> = {
   paid: 'amountPaid',
   paymentmode: 'paymentMode',
   paymentstatus: 'paymentStatus',
+  seatnumber: 'seatNumber',
+  seat: 'seatNumber',
+  seatno: 'seatNumber',
   remarks: 'remarks',
   type: 'type',
   membertype: 'type',
@@ -147,6 +158,74 @@ const parseMemberType = (v: unknown): CreateMemberType => {
   if (raw === 'demo') return 'demo';
   if (raw === 'without-seat' || raw === 'withoutseat') return 'without-seat';
   throw new Error(`Invalid type "${v}". Use permanent, demo, or without-seat`);
+};
+
+/** Blank type defaults to permanent (common in bulk spreadsheets). */
+const parseMemberTypeWithDefault = (v: unknown): CreateMemberType => {
+  const raw = String(v ?? '').trim();
+  if (!raw) return 'permanent';
+  return parseMemberType(v);
+};
+
+const resolveMembershipPlan = (
+  planRaw: unknown,
+  type: CreateMemberType
+): MembershipPlan | undefined => {
+  if (type === 'demo') {
+    const raw = String(planRaw ?? '').trim();
+    if (!raw) return undefined;
+    const normalized = normalizeMembershipPlan(raw);
+    if (!normalized) {
+      throw new Error(
+        `Invalid membershipPlan "${raw}". Use 1 Month, 2 Months, 3 Months, 6 Months, or 1 Year`
+      );
+    }
+    return normalized;
+  }
+
+  const raw = String(planRaw ?? '').trim();
+  if (!raw) return MembershipPlan.ONE_MONTH;
+
+  const normalized = normalizeMembershipPlan(raw);
+  if (!normalized) {
+    throw new Error(
+      `Invalid membershipPlan "${raw}". Use 1 Month, 2 Months, 3 Months, 6 Months, or 1 Year`
+    );
+  }
+  return normalized;
+};
+
+const resolveEndDate = (
+  startDate: Date,
+  endDate: Date | undefined,
+  membershipPlan: MembershipPlan | undefined,
+  type: CreateMemberType
+): Date | undefined => {
+  if (endDate) return endDate;
+  if (type === 'demo') return undefined;
+  const months = membershipPlan ? MEMBERSHIP_PLAN_MONTHS[membershipPlan] : 1;
+  return addMonths(startDate, months);
+};
+
+const resolveImportNumbers = (
+  type: CreateMemberType,
+  feePerMonthRaw: unknown,
+  discountRaw: unknown,
+  amountPaidRaw: unknown
+) => {
+  if (type === 'demo') {
+    return {
+      feePerMonth: parseOptionalNumber(feePerMonthRaw),
+      discount: parseOptionalNumber(discountRaw) ?? 0,
+      amountPaid: parseOptionalNumber(amountPaidRaw) ?? 0,
+    };
+  }
+
+  return {
+    feePerMonth: parseOptionalNumber(feePerMonthRaw) ?? 0,
+    discount: parseOptionalNumber(discountRaw) ?? 0,
+    amountPaid: parseOptionalNumber(amountPaidRaw) ?? 0,
+  };
 };
 
 const parsePaymentStatus = (v: unknown): PaymentStatus => {
@@ -196,6 +275,30 @@ const parseOptionalNumber = (v: unknown): number | undefined => {
   return num;
 };
 
+const parseSeatNumber = (v: unknown): number | undefined => {
+  if (v === undefined || v === null || v === '') return undefined;
+  const num = Number(v);
+  if (!Number.isInteger(num) || num < 1) {
+    throw new Error(`Invalid seatNumber: ${v}`);
+  }
+  return num;
+};
+
+const resolveSeatIdForImport = async (
+  libraryId: string,
+  seatNumber: number
+): Promise<string> => {
+  try {
+    const seat = await seatService.getSeatByNumber(libraryId, seatNumber);
+    return seat._id.toString();
+  } catch (err) {
+    if (err instanceof ApiError && err.statusCode === 404) {
+      throw new Error(`Seat number ${seatNumber} not found in this library`);
+    }
+    throw err;
+  }
+};
+
 export const adminImportService = {
   async generateMemberImportTemplate(): Promise<Buffer> {
     const workbook = new ExcelJS.Workbook();
@@ -223,14 +326,15 @@ export const adminImportService = {
       ['shiftType', 'Yes', 'Morning, Evening, Full Day'],
       ['startDate', 'Yes', 'YYYY-MM-DD'],
       ['endDate', 'No', 'Required for permanent & without-seat'],
-      ['membershipPlan', 'Conditional', '1 Month, 2 Months, 3 Months, 6 Months, 1 Year'],
-      ['feePerMonth', 'Conditional', 'Required for permanent & without-seat'],
-      ['discount', 'No', 'Flat discount amount'],
-      ['amountPaid', 'Conditional', 'Required for permanent & without-seat'],
-      ['paymentStatus', 'Conditional', 'paid, partial, unpaid'],
-      ['paymentMode', 'Conditional', 'cash, online, upi'],
+      ['membershipPlan', 'Conditional', 'Defaults to 1 Month if blank (permanent/without-seat)'],
+      ['feePerMonth', 'Conditional', 'Defaults to 0 if blank'],
+      ['discount', 'No', 'Defaults to 0 if blank'],
+      ['amountPaid', 'Conditional', 'Defaults to 0 if blank (unpaid members)'],
+      ['paymentStatus', 'Conditional', 'Defaults to unpaid if blank'],
+      ['paymentMode', 'Conditional', 'Defaults to cash if blank'],
+      ['seatNumber', 'No', 'Seat number in this library (permanent/demo only)'],
       ['remarks', 'No', 'Optional notes'],
-      ['type', 'Yes', 'permanent, demo, without-seat (not student)'],
+      ['type', 'No', 'Defaults to permanent if blank'],
     ];
     for (const row of instructions) {
       notes.addRow(row);
@@ -263,7 +367,13 @@ export const adminImportService = {
       }
     }
 
-    const results: { row: number; success: boolean; memberId?: string; error?: string }[] = [];
+    const results: {
+      row: number;
+      success: boolean;
+      memberId?: string;
+      seatNumber?: number;
+      error?: string;
+    }[] = [];
 
     for (let r = 2; r <= sheet.rowCount; r++) {
       const row = sheet.getRow(r);
@@ -279,22 +389,33 @@ export const adminImportService = {
       if (!fullName && !mobileNumber) continue;
 
       try {
-        const type = parseMemberType(get('type'));
+        const type = parseMemberTypeWithDefault(get('type'));
         const shiftType = parseShift(String(get('shiftType')));
         const startDate = parseDate(get('startDate'));
-        const endDateVal = get('endDate');
-        const endDate = endDateVal ? parseDate(endDateVal) : undefined;
+        const membershipPlan = resolveMembershipPlan(get('membershipPlan'), type);
+        const endDate = resolveEndDate(
+          startDate,
+          get('endDate') ? parseDate(get('endDate')) : undefined,
+          membershipPlan,
+          type
+        );
 
-        const planRaw = get('membershipPlan');
-        const membershipPlan = planRaw
-          ? normalizeMembershipPlan(String(planRaw)) ?? undefined
-          : undefined;
-
-        if (type !== 'demo' && planRaw && !membershipPlan) {
-          throw new Error(
-            `Invalid membershipPlan "${planRaw}". Use 1 Month, 2 Months, 3 Months, 6 Months, or 1 Year`
-          );
+        const seatNumber = parseSeatNumber(get('seatNumber'));
+        if (seatNumber !== undefined && type === 'without-seat') {
+          throw new Error('without-seat members cannot have a seatNumber');
         }
+
+        let seatId: string | undefined;
+        if (seatNumber !== undefined) {
+          seatId = await resolveSeatIdForImport(libraryId, seatNumber);
+        }
+
+        const { feePerMonth, discount, amountPaid } = resolveImportNumbers(
+          type,
+          get('feePerMonth'),
+          get('discount'),
+          get('amountPaid')
+        );
 
         const payload = {
           type,
@@ -306,15 +427,16 @@ export const adminImportService = {
           startDate,
           endDate,
           membershipPlan,
-          feePerMonth: parseOptionalNumber(get('feePerMonth')),
-          discount: parseOptionalNumber(get('discount')),
-          amountPaid: parseOptionalNumber(get('amountPaid')),
+          feePerMonth,
+          discount,
+          amountPaid,
           paymentMode: get('paymentMode')
             ? parsePaymentMode(get('paymentMode'))
             : PaymentMode.CASH,
           paymentStatus: get('paymentStatus')
             ? parsePaymentStatus(get('paymentStatus'))
             : PaymentStatus.UNPAID,
+          seatId,
           remarks: parseOptionalString(get('remarks')),
         };
 
@@ -323,6 +445,7 @@ export const adminImportService = {
           row: r,
           success: true,
           memberId: (member as { memberId?: string }).memberId,
+          ...(seatNumber !== undefined ? { seatNumber } : {}),
         });
       } catch (err) {
         results.push({

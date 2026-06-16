@@ -1,0 +1,12 @@
+﻿MongoDB connected successfully
+
+=== member-import-template (1).xlsx ===
+imported: 3 failed: 0 total: 3
+Failure reasons: {}
+
+=== member-import-template Drishti.xlsx ===
+imported: 42 failed: 26 total: 68
+Failure reasons: {
+  "Member validation failed: dueAmount: Cast to Number failed for value \"NaN\" (type number) at path \"dueAmount\"": 25,
+  "type is required. Use permanent, demo, or without-seat": 1
+}

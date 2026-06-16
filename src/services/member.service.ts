@@ -65,6 +65,7 @@ export interface CreateDemoMemberData {
   startDate: Date;
   // endDate is optional for demo members
   endDate?: Date;
+  seatId?: string;
   remarks?: string;
 }
 
@@ -135,10 +136,11 @@ const calculateFees = (data: {
   const feesAfterDiscount = data.feePerMonth - discount;
   const multiplier = resolvePlanMonths(data.membershipPlan);
   const totalFee = feesAfterDiscount * multiplier;
-  const dueAmount = Math.max(0, totalFee - data.amountPaid);
+  const amountPaid = data.amountPaid ?? 0;
+  const dueAmount = Math.max(0, totalFee - amountPaid);
 
   let paymentStatus: PaymentStatus;
-  if (data.amountPaid === 0) {
+  if (amountPaid === 0) {
     paymentStatus = PaymentStatus.UNPAID;
   } else if (dueAmount === 0) {
     paymentStatus = PaymentStatus.PAID;
@@ -224,6 +226,7 @@ export const memberService = {
             startDate: data.startDate,
             endDate: data.endDate,
             remarks: data.remarks,
+            seatId: data.seatId,
           },
           libraryId
         );
@@ -336,7 +339,16 @@ export const memberService = {
       payload.remarks = remarks;
     }
 
-    return Member.create(payload);
+    const member = await Member.create(payload);
+
+    if (data.seatId && member.status !== MemberStatus.EXPIRED) {
+      await seatService.assignSeat(data.seatId, member._id.toString(), data.shiftType);
+      member.seat = new mongoose.Types.ObjectId(data.seatId);
+      await member.save();
+      await seatService.syncSeatFromMembers(data.seatId);
+    }
+
+    return member.populate('seat');
   },
 
   async createMemberWithoutSeat(
