@@ -3,6 +3,7 @@ import { ApiError } from '../utils/ApiError';
 import { MESSAGES } from '../constants/messages';
 import { memberService, CreateMemberType } from './member.service';
 import { seatService } from './seat.service';
+import mongoose from 'mongoose';
 import {
   PaymentMode,
   PaymentStatus,
@@ -123,9 +124,55 @@ const headerMap: Record<string, string> = {
   seatnumber: 'seatNumber',
   seat: 'seatNumber',
   seatno: 'seatNumber',
+  seatnum: 'seatNumber',
+  seatid: 'seatNumber',
+  sno: 'seatNumber',
   remarks: 'remarks',
   type: 'type',
   membertype: 'type',
+};
+
+const mapImportColumns = (headerRow: ExcelJS.Row): Record<string, number> => {
+  const colIndex: Record<string, number> = {};
+
+  headerRow.eachCell((cell, col) => {
+    const raw = String(cell.value ?? '').trim();
+    const mapped = headerMap[normalizeHeader(raw)];
+    if (mapped) colIndex[mapped] = col;
+  });
+
+  // Fuzzy match: "Seat Number", "Seat No", etc. when exact key missing
+  if (!colIndex.seatNumber) {
+    headerRow.eachCell((cell, col) => {
+      const raw = String(cell.value ?? '').trim();
+      if (raw && /seat/i.test(raw)) {
+        colIndex.seatNumber = col;
+      }
+    });
+  }
+
+  return colIndex;
+};
+
+const ensureImportedMemberSeat = async (
+  member: { _id: mongoose.Types.ObjectId; seat?: mongoose.Types.ObjectId },
+  libraryId: string,
+  seatId: string,
+  shiftType: ShiftType
+) => {
+  if (member.seat) return;
+
+  const seat = await seatService.getSeatById(seatId);
+  if (seat.library.toString() !== libraryId) {
+    throw new Error('Seat does not belong to this library');
+  }
+
+  await seatService.assignSeat(seatId, member._id.toString(), shiftType);
+  await mongoose.model('Member').updateOne(
+    { _id: member._id },
+    { $set: { seat: new mongoose.Types.ObjectId(seatId) } }
+  );
+  await seatService.syncSeatFromMembers(seatId);
 };
 
 const parseShift = (v: string): ShiftType => {
@@ -354,12 +401,14 @@ export const adminImportService = {
     }
 
     const headerRow = sheet.getRow(1);
-    const colIndex: Record<string, number> = {};
-    headerRow.eachCell((cell, col) => {
-      const raw = String(cell.value ?? '').trim();
-      const mapped = headerMap[normalizeHeader(raw)];
-      if (mapped) colIndex[mapped] = col;
-    });
+    const colIndex = mapImportColumns(headerRow);
+    const warnings: string[] = [];
+
+    if (!colIndex.seatNumber) {
+      warnings.push(
+        'seatNumber column not found in Excel — members were imported but no seats were assigned. Download a fresh template and add a column named seatNumber.'
+      );
+    }
 
     for (const col of REQUIRED_COLUMNS) {
       if (!colIndex[col]) {
@@ -372,8 +421,10 @@ export const adminImportService = {
       success: boolean;
       memberId?: string;
       seatNumber?: number;
+      seatAssigned?: boolean;
       error?: string;
     }[] = [];
+    let seatsAssigned = 0;
 
     for (let r = 2; r <= sheet.rowCount; r++) {
       const row = sheet.getRow(r);
@@ -440,12 +491,22 @@ export const adminImportService = {
           remarks: parseOptionalString(get('remarks')),
         };
 
-        const member = await memberService.createMember(payload, libraryId);
+        let member = await memberService.createMember(payload, libraryId);
+
+        if (seatId) {
+          const hadSeat = Boolean(member.seat);
+          if (!hadSeat) {
+            await ensureImportedMemberSeat(member, libraryId, seatId, shiftType);
+            member = await memberService.getMemberById(member._id.toString());
+          }
+          if (member.seat) seatsAssigned += 1;
+        }
+
         results.push({
           row: r,
           success: true,
           memberId: (member as { memberId?: string }).memberId,
-          ...(seatNumber !== undefined ? { seatNumber } : {}),
+          ...(seatNumber !== undefined ? { seatNumber, seatAssigned: Boolean(member.seat) } : {}),
         });
       } catch (err) {
         results.push({
@@ -465,6 +526,8 @@ export const adminImportService = {
       totalRows: results.length,
       imported,
       failed,
+      seatsAssigned,
+      warnings,
       results,
       message: MESSAGES.MEMBER_IMPORT_COMPLETED,
     };

@@ -490,8 +490,15 @@
               const res = await fetch(API + '/admin/libraries/' + libId + '/import-members', { method: 'POST', headers: { Authorization: 'Bearer ' + getToken() }, body: fd });
               const json = await res.json();
               if (res.ok) {
-                $('importResult').innerHTML = `<div style="background:var(--success-bg);color:#059669;padding:14px;border-radius:10px">✅ Imported <strong>${json.data.imported}</strong> members · <strong>${json.data.failed}</strong> failed</div>`;
-                showToast(`Imported ${json.data.imported} members`);
+                const d = json.data || {};
+                let html = `<div style="background:var(--success-bg);color:#059669;padding:14px;border-radius:10px">✅ Imported <strong>${d.imported}</strong> members · <strong>${d.failed}</strong> failed`;
+                if (d.seatsAssigned != null) html += ` · <strong>${d.seatsAssigned}</strong> seats assigned`;
+                html += '</div>';
+                if (d.warnings?.length) {
+                  html += d.warnings.map(w => `<div class="alert-error" style="margin-top:10px">⚠️ ${w}</div>`).join('');
+                }
+                $('importResult').innerHTML = html;
+                showToast(`Imported ${d.imported} members`);
               } else {
                 $('importResult').innerHTML = `<div class="alert-error">${json.message}</div>`;
               }
