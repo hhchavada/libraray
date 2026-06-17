@@ -161,6 +161,34 @@ export const razorpayService = {
     );
   },
 
+  async fetchSubscription(razorpaySubscriptionId: string) {
+    return getRazorpayClient().subscriptions.fetch(
+      razorpaySubscriptionId
+    ) as Promise<{ id: string; status: string }>;
+  },
+
+  async fetchLatestPaidPaymentForSubscription(
+    razorpaySubscriptionId: string
+  ): Promise<string | null> {
+    try {
+      const invoices = (await getRazorpayClient().invoices.all({
+        subscription_id: razorpaySubscriptionId,
+        count: 20,
+      })) as { items?: Array<{ status?: string; payment_id?: string }> };
+
+      const paid = invoices.items?.find(
+        (invoice) => invoice.status === 'paid' && invoice.payment_id
+      );
+      return paid?.payment_id ?? null;
+    } catch (err) {
+      logger.warn(LOG_TAG, 'Could not fetch subscription invoices', {
+        razorpaySubscriptionId,
+        err,
+      });
+      return null;
+    }
+  },
+
   verifySubscriptionPaymentSignature(
     razorpayPaymentId: string,
     razorpaySubscriptionId: string,

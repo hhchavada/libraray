@@ -52,6 +52,25 @@ export const subscriptionController = {
     res.status(200).json(new ApiResponse(200, MESSAGES.SUBSCRIPTION_HISTORY_FETCHED, history));
   }),
 
+  /** Razorpay subscription redirect after successful payment — no auth (signature verified). */
+  paymentCallback: asyncHandler(async (req: Request, res: Response) => {
+    const subscription = await subscriptionService.handleSubscriptionCallback(
+      req.query as Record<string, string | undefined>
+    );
+    const plan = subscription.planId as { name?: string } | null;
+    const end = subscription.endDate
+      ? new Date(subscription.endDate).toLocaleDateString('en-IN')
+      : '—';
+
+    res.status(200).send(
+      `<!DOCTYPE html><html><head><meta charset="utf-8"/><title>Payment successful</title></head>` +
+        `<body style="font-family:system-ui;text-align:center;padding:48px">` +
+        `<h1>Payment successful</h1>` +
+        `<p>${plan?.name ?? 'Subscription'} is active until <strong>${end}</strong>.</p>` +
+        `<p style="color:#64748b;font-size:14px">You can close this window and return to the app.</p></body></html>`
+    );
+  }),
+
   /** Razorpay webhook — no auth (HMAC verified). Requires raw body middleware. */
   webhook: asyncHandler(async (req: Request, res: Response) => {
     const rawBody =

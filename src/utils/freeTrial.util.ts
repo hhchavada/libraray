@@ -1,4 +1,9 @@
 import { User } from '../models/user.model';
+import { Subscription } from '../models/subscription.model';
+import {
+  LibrarySubscriptionStatus,
+  SubscriptionPaymentStatus,
+} from '../constants/enums';
 
 export const FREE_TRIAL_DAYS = 7;
 
@@ -12,6 +17,8 @@ export interface FreeTrialInfo {
   expiresAt: string;
   isActive: boolean;
   isExpired: boolean;
+  /** Set when user has an active paid subscription. */
+  supersededBySubscription?: boolean;
 }
 
 export const buildFreeTrialInfo = (
@@ -45,5 +52,35 @@ export const getFreeTrialForUserId = async (userId: string): Promise<FreeTrialIn
   if (!user) {
     return null;
   }
-  return buildFreeTrialInfo(user.freeTrialStartedAt, user.createdAt);
+
+  const trial = buildFreeTrialInfo(user.freeTrialStartedAt, user.createdAt);
+  if (!trial) {
+    return null;
+  }
+
+  const hasPaidSubscription = await Subscription.exists({
+    userId,
+    status: LibrarySubscriptionStatus.ACTIVE,
+    paymentStatus: SubscriptionPaymentStatus.PAID,
+    endDate: { $gt: new Date() },
+  });
+
+  if (hasPaidSubscription) {
+    return {
+      ...trial,
+      daysRemaining: 0,
+      daysUsed: FREE_TRIAL_DAYS,
+      isActive: false,
+      isExpired: true,
+      supersededBySubscription: true,
+    };
+  }
+
+  return trial;
+};
+
+/** Marks free trial as ended when the user purchases a subscription. */
+export const endFreeTrialForUser = async (userId: string): Promise<void> => {
+  const expiredStart = new Date(Date.now() - (FREE_TRIAL_DAYS + 1) * MS_PER_DAY);
+  await User.findByIdAndUpdate(userId, { $set: { freeTrialStartedAt: expiredStart } });
 };

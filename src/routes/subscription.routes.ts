@@ -7,6 +7,7 @@ import { subscriptionValidation } from '../validations/subscription.validation';
 const router = Router();
 
 router.get('/plans', subscriptionController.getPlans);
+router.get('/payment-callback', subscriptionController.paymentCallback);
 router.post('/webhook', subscriptionController.webhook);
 
 router.post(

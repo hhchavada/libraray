@@ -19,6 +19,7 @@ import {
 import { formatRazorpayContact, razorpayService } from './razorpay.service';
 import { addMonths, toRupeesPaise } from '../utils/subscription.util';
 import { calculateGstBreakdown } from '../utils/gst.util';
+import { endFreeTrialForUser } from '../utils/freeTrial.util';
 import { logger } from '../utils/logger';
 
 const LOG_TAG = 'Subscription';
@@ -34,7 +35,7 @@ interface RazorpayWebhookEntity {
 
 interface RazorpayWebhookPayload {
   subscription?: { entity: RazorpayWebhookEntity };
-  payment?: { entity: { id: string } };
+  payment?: { entity: { id: string; subscription_id?: string } };
 }
 
 interface RazorpayWebhookEvent {
@@ -191,6 +192,8 @@ export const subscriptionService = {
     subscription.razorpayGst = gst.razorpayGst;
     subscription.netSettlementAmount = gst.netSettlementAmount;
     await subscription.save();
+
+    await endFreeTrialForUser(userId);
 
     logger.info(LOG_TAG, 'Subscription activated', {
       subscriptionId: subscription._id,
@@ -450,6 +453,77 @@ export const subscriptionService = {
     return this.activateSubscription(subscription, razorpayPaymentId, razorpaySignature);
   },
 
+  /** Razorpay redirect after subscription checkout (GET) — no auth. */
+  async handleSubscriptionCallback(query: Record<string, string | undefined>) {
+    const razorpayPaymentId = query.razorpay_payment_id;
+    const razorpaySubscriptionId = query.razorpay_subscription_id;
+    const razorpaySignature = query.razorpay_signature;
+
+    if (!razorpayPaymentId || !razorpaySubscriptionId || !razorpaySignature) {
+      throw new ApiError(400, MESSAGES.VALIDATION_ERROR);
+    }
+
+    const isValid = razorpayService.verifySubscriptionPaymentSignature(
+      razorpayPaymentId,
+      razorpaySubscriptionId,
+      razorpaySignature
+    );
+    if (!isValid) {
+      throw new ApiError(400, MESSAGES.SUBSCRIPTION_INVALID_SIGNATURE);
+    }
+
+    const subscription = await Subscription.findOne({
+      razorpaySubscriptionId,
+    });
+    if (!subscription) {
+      throw new ApiError(404, MESSAGES.SUBSCRIPTION_ORDER_NOT_FOUND);
+    }
+
+    return this.activateSubscription(subscription, razorpayPaymentId, razorpaySignature);
+  },
+
+  /**
+   * If payment succeeded on Razorpay but webhook/verify was missed, activate on read.
+   */
+  async syncPendingSubscriptionFromRazorpay(userId: string): Promise<void> {
+    const pending = await Subscription.findOne({
+      userId,
+      paymentStatus: SubscriptionPaymentStatus.PENDING,
+      razorpaySubscriptionId: { $exists: true, $ne: '' },
+    }).sort({ createdAt: -1 });
+
+    if (!pending?.razorpaySubscriptionId) {
+      return;
+    }
+
+    try {
+      const rzSub = await razorpayService.fetchSubscription(pending.razorpaySubscriptionId);
+      const activeStatuses = ['active', 'authenticated', 'completed'];
+      if (!activeStatuses.includes(rzSub.status)) {
+        return;
+      }
+
+      const paymentId = await razorpayService.fetchLatestPaidPaymentForSubscription(
+        pending.razorpaySubscriptionId
+      );
+      if (!paymentId) {
+        return;
+      }
+
+      await this.processRecurringCharge(pending.razorpaySubscriptionId, paymentId);
+      logger.info(LOG_TAG, 'Synced pending subscription from Razorpay', {
+        userId,
+        razorpaySubscriptionId: pending.razorpaySubscriptionId,
+        paymentId,
+      });
+    } catch (err) {
+      logger.warn(LOG_TAG, 'Could not sync pending subscription from Razorpay', {
+        userId,
+        err,
+      });
+    }
+  },
+
   async handleWebhook(rawBody: string, signature: string | undefined): Promise<void> {
     if (!signature) {
       throw new ApiError(400, MESSAGES.SUBSCRIPTION_INVALID_SIGNATURE);
@@ -474,6 +548,15 @@ export const subscriptionService = {
           await this.processRecurringCharge(subEntity.id, paymentEntity.id);
         }
         break;
+
+      case 'payment.captured':
+      case 'payment.authorized': {
+        const pay = paymentEntity;
+        if (pay?.subscription_id && pay.id) {
+          await this.processRecurringCharge(pay.subscription_id, pay.id);
+        }
+        break;
+      }
 
       case 'subscription.halted':
       case 'subscription.cancelled':
@@ -505,6 +588,7 @@ export const subscriptionService = {
   },
 
   async getCurrentSubscription(userId: string) {
+    await this.syncPendingSubscriptionFromRazorpay(userId);
     return this.findActiveSubscription(userId, true);
   },
 
