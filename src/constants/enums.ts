@@ -140,6 +140,8 @@ export enum PlanCategory {
   MEDIUM = 'medium',
   LARGE = 'large',
   MEGA = 'mega',
+  /** ₹1 live-payment test plan (not shown in production UI by default). */
+  TEST = 'test',
 }
 
 export enum PlanDurationType {

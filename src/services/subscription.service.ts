@@ -204,9 +204,48 @@ export const subscriptionService = {
     return subscription.populate('planId');
   },
 
+  async linkPendingSubscription(
+    razorpaySubscriptionId: string,
+    notes?: Record<string, string>
+  ): Promise<ISubscriptionDocument | null> {
+    if (notes?.subscriptionId && mongoose.Types.ObjectId.isValid(notes.subscriptionId)) {
+      const byId = await Subscription.findById(notes.subscriptionId);
+      if (byId && byId.paymentStatus === SubscriptionPaymentStatus.PENDING) {
+        byId.razorpaySubscriptionId = razorpaySubscriptionId;
+        await byId.save();
+        logger.info(LOG_TAG, 'Linked subscription via notes.subscriptionId', {
+          mongoId: byId._id,
+          razorpaySubscriptionId,
+        });
+        return byId;
+      }
+    }
+
+    if (notes?.userId && mongoose.Types.ObjectId.isValid(notes.userId)) {
+      const byUser = await Subscription.findOne({
+        userId: notes.userId,
+        paymentStatus: SubscriptionPaymentStatus.PENDING,
+        status: LibrarySubscriptionStatus.PENDING,
+      }).sort({ createdAt: -1 });
+
+      if (byUser) {
+        byUser.razorpaySubscriptionId = razorpaySubscriptionId;
+        await byUser.save();
+        logger.info(LOG_TAG, 'Linked subscription via notes.userId', {
+          mongoId: byUser._id,
+          razorpaySubscriptionId,
+        });
+        return byUser;
+      }
+    }
+
+    return null;
+  },
+
   async processRecurringCharge(
     razorpaySubscriptionId: string,
-    razorpayPaymentId: string
+    razorpayPaymentId: string,
+    notes?: Record<string, string>
   ): Promise<ISubscriptionDocument | null> {
     if (!razorpayPaymentId) {
       logger.warn(LOG_TAG, 'Recurring charge without payment id', { razorpaySubscriptionId });
@@ -224,10 +263,17 @@ export const subscriptionService = {
       return duplicatePayment.populate('planId');
     }
 
-    const pending = await Subscription.findOne({
+    let pending = await Subscription.findOne({
       razorpaySubscriptionId,
       paymentStatus: SubscriptionPaymentStatus.PENDING,
     }).sort({ createdAt: -1 });
+
+    if (!pending) {
+      const linked = await this.linkPendingSubscription(razorpaySubscriptionId, notes);
+      if (linked) {
+        return this.activateSubscription(linked, razorpayPaymentId);
+      }
+    }
 
     if (pending) {
       return this.activateSubscription(pending, razorpayPaymentId);
@@ -379,9 +425,27 @@ export const subscriptionService = {
       },
     });
 
+    if (!razorpaySub.id) {
+      subscription.status = LibrarySubscriptionStatus.CANCELLED;
+      await subscription.save();
+      throw new ApiError(500, MESSAGES.SUBSCRIPTION_PAYMENT_FAILED);
+    }
+
     subscription.razorpaySubscriptionId = razorpaySub.id;
     subscription.razorpayCustomerId = customer.id;
     await subscription.save();
+
+    const saved = await Subscription.findById(subscription._id).select('razorpaySubscriptionId');
+    if (!saved?.razorpaySubscriptionId) {
+      logger.error(LOG_TAG, 'razorpaySubscriptionId not persisted after save', {
+        subscriptionId: subscription._id,
+        razorpayId: razorpaySub.id,
+      });
+      await Subscription.updateOne(
+        { _id: subscription._id },
+        { $set: { razorpaySubscriptionId: razorpaySub.id, razorpayCustomerId: customer.id } }
+      );
+    }
 
     logger.info(LOG_TAG, 'Pending recurring subscription created', {
       subscriptionId: subscription._id,
@@ -486,17 +550,42 @@ export const subscriptionService = {
    * If payment succeeded on Razorpay but webhook/verify was missed, activate on read.
    */
   async syncPendingSubscriptionFromRazorpay(userId: string): Promise<void> {
-    const pending = await Subscription.findOne({
+    let pending = await Subscription.findOne({
       userId,
       paymentStatus: SubscriptionPaymentStatus.PENDING,
       razorpaySubscriptionId: { $exists: true, $ne: '' },
     }).sort({ createdAt: -1 });
 
-    if (!pending?.razorpaySubscriptionId) {
+    if (!pending) {
+      pending = await Subscription.findOne({
+        userId,
+        paymentStatus: SubscriptionPaymentStatus.PENDING,
+        status: LibrarySubscriptionStatus.PENDING,
+      }).sort({ createdAt: -1 });
+    }
+
+    if (!pending) {
       return;
     }
 
     try {
+      if (!pending.razorpaySubscriptionId) {
+        const matches = await razorpayService.findSubscriptionsByMongoSubscriptionId(
+          pending._id.toString()
+        );
+        const activeMatch = matches.find((s) =>
+          ['active', 'authenticated', 'completed'].includes(s.status)
+        );
+        if (activeMatch?.id) {
+          pending.razorpaySubscriptionId = activeMatch.id;
+          await pending.save();
+        }
+      }
+
+      if (!pending.razorpaySubscriptionId) {
+        return;
+      }
+
       const rzSub = await razorpayService.fetchSubscription(pending.razorpaySubscriptionId);
       const activeStatuses = ['active', 'authenticated', 'completed'];
       if (!activeStatuses.includes(rzSub.status)) {
@@ -510,7 +599,11 @@ export const subscriptionService = {
         return;
       }
 
-      await this.processRecurringCharge(pending.razorpaySubscriptionId, paymentId);
+      await this.processRecurringCharge(
+        pending.razorpaySubscriptionId,
+        paymentId,
+        { userId, subscriptionId: pending._id.toString() }
+      );
       logger.info(LOG_TAG, 'Synced pending subscription from Razorpay', {
         userId,
         razorpaySubscriptionId: pending.razorpaySubscriptionId,
@@ -543,11 +636,22 @@ export const subscriptionService = {
     switch (eventName) {
       case 'subscription.authenticated':
       case 'subscription.activated':
-      case 'subscription.charged':
-        if (subEntity?.id && paymentEntity?.id) {
-          await this.processRecurringCharge(subEntity.id, paymentEntity.id);
+      case 'subscription.charged': {
+        if (subEntity?.id) {
+          const paymentId =
+            paymentEntity?.id ??
+            (await razorpayService.fetchLatestPaidPaymentForSubscription(subEntity.id));
+          if (paymentId) {
+            await this.processRecurringCharge(subEntity.id, paymentId, subEntity.notes);
+          } else {
+            logger.warn(LOG_TAG, 'Subscription event without payment id', {
+              event: eventName,
+              subscriptionId: subEntity.id,
+            });
+          }
         }
         break;
+      }
 
       case 'payment.captured':
       case 'payment.authorized': {

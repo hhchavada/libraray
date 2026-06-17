@@ -72,6 +72,7 @@ const buildLibraryQuery = async (filters: AdminFilters): Promise<mongoose.Types.
       [PlanCategory.MEDIUM]: { min: 51, max: 100 },
       [PlanCategory.LARGE]: { min: 101, max: 150 },
       [PlanCategory.MEGA]: { min: 151, max: 10000 },
+      [PlanCategory.TEST]: { min: 1, max: 10000 },
     };
     const r = ranges[filters.planCategory];
     query.totalSeats = { $gte: r.min, $lte: r.max };

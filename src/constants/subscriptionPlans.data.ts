@@ -218,4 +218,5 @@ export const PLAN_CATEGORY_LABELS: Record<PlanCategory, string> = {
   [PlanCategory.MEDIUM]: 'Medium Library (51–100 Seats)',
   [PlanCategory.LARGE]: 'Large Library (101–150 Seats)',
   [PlanCategory.MEGA]: 'Mega Library (151+ Seats)',
+  [PlanCategory.TEST]: 'Test (Payment QA)',
 };

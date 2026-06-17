@@ -1,0 +1,56 @@
+﻿node.exe : (node:5732) [MONGOOSE] Warning: Duplicate schema index on {"razorpaySubscriptionId":1} found. This is often 
+due to declaring an index using both "index: true" and "schema.index()". Please remove the duplicate index definition.
+At C:\Program Files\nodejs\npx.ps1:29 char:3
++   & $NODE_EXE $NPX_CLI_JS $args
++   ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: ((node:5732) [MO...dex definition.:String) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
+ 
+(Use `node --trace-warnings ...` to show where the warning was created)
+MongoDB connected successfully
+=== Recent DB subscriptions ===
+{
+  _id: new ObjectId('6a329ebdca802ae1970b5918'),
+  userId: new ObjectId('6a329c8eca802ae1970b5809'),
+  status: 'pending',
+  paymentStatus: 'pending',
+  razorpaySubscriptionId: undefined,
+  razorpayPaymentId: undefined,
+  createdAt: 2026-06-17T13:18:53.586Z
+}
+{
+  _id: new ObjectId('6a329e74ca802ae1970b58e3'),
+  userId: new ObjectId('6a329c8eca802ae1970b5809'),
+  status: 'cancelled',
+  paymentStatus: 'pending',
+  razorpaySubscriptionId: undefined,
+  razorpayPaymentId: undefined,
+  createdAt: 2026-06-17T13:17:40.976Z
+}
+{
+  _id: new ObjectId('6a3249777b7466ae041167e0'),
+  userId: new ObjectId('6a3241577b7466ae041166b7'),
+  status: 'pending',
+  paymentStatus: 'pending',
+  razorpaySubscriptionId: undefined,
+  razorpayPaymentId: undefined,
+  createdAt: 2026-06-17T07:15:03.687Z
+}
+{
+  _id: new ObjectId('6a3248f87b7466ae0411674a'),
+  userId: new ObjectId('6a3241577b7466ae041166b7'),
+  status: 'cancelled',
+  paymentStatus: 'pending',
+  razorpaySubscriptionId: undefined,
+  razorpayPaymentId: undefined,
+  createdAt: 2026-06-17T07:12:56.280Z
+}
+{
+  _id: new ObjectId('6a3131cc1140b6eab037b7ea'),
+  userId: new ObjectId('6a3015af1140b6eab0378d2a'),
+  status: 'pending',
+  paymentStatus: 'pending',
+  razorpaySubscriptionId: undefined,
+  razorpayPaymentId: undefined,
+  createdAt: 2026-06-16T11:21:48.911Z
+}

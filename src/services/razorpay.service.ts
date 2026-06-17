@@ -139,14 +139,19 @@ export const razorpayService = {
 
     const subscription = (await getRazorpayClient().subscriptions.create(
       payload
-    )) as unknown as { id: string; short_url: string };
+    )) as unknown as { id?: string; short_url?: string };
+
+    if (!subscription.id) {
+      logger.error(LOG_TAG, 'Razorpay subscription create returned no id', { subscription });
+      throw new ApiError(500, MESSAGES.SUBSCRIPTION_PAYMENT_FAILED);
+    }
 
     logger.info(LOG_TAG, 'Recurring subscription created', {
       subscriptionId: subscription.id,
       shortUrl: subscription.short_url,
     });
 
-    return subscription;
+    return subscription as { id: string; short_url: string };
   },
 
   async cancelSubscription(razorpaySubscriptionId: string, cancelAtCycleEnd = false) {
@@ -171,6 +176,27 @@ export const razorpayService = {
     razorpaySubscriptionId: string
   ): Promise<string | null> {
     try {
+      const payments = (await getRazorpayClient().payments.all({
+        subscription_id: razorpaySubscriptionId,
+        count: 20,
+      } as never)) as {
+        items?: Array<{ id: string; status: string }>;
+      };
+
+      const captured = payments.items?.find(
+        (p) => p.status === 'captured' || p.status === 'authorized'
+      );
+      if (captured?.id) {
+        return captured.id;
+      }
+    } catch (err) {
+      logger.warn(LOG_TAG, 'Could not fetch subscription payments', {
+        razorpaySubscriptionId,
+        err,
+      });
+    }
+
+    try {
       const invoices = (await getRazorpayClient().invoices.all({
         subscription_id: razorpaySubscriptionId,
         count: 20,
@@ -186,6 +212,25 @@ export const razorpayService = {
         err,
       });
       return null;
+    }
+  },
+
+  async findSubscriptionsByMongoSubscriptionId(mongoSubscriptionId: string) {
+    try {
+      const result = (await getRazorpayClient().subscriptions.all({
+        count: 100,
+      })) as {
+        items?: Array<{ id: string; status: string; notes?: Record<string, string> }>;
+      };
+
+      return (
+        result.items?.filter(
+          (sub) => sub.notes?.subscriptionId === mongoSubscriptionId
+        ) ?? []
+      );
+    } catch (err) {
+      logger.warn(LOG_TAG, 'Could not list Razorpay subscriptions', { err });
+      return [];
     }
   },
 
