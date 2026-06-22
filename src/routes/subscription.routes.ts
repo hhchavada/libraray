@@ -25,6 +25,7 @@ router.post(
 );
 
 router.get('/current', protect, subscriptionController.getCurrent);
+router.get('/recurring-status', protect, subscriptionController.getRecurringStatus);
 router.get('/history', protect, subscriptionController.getHistory);
 
 export default router;

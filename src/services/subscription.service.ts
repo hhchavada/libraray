@@ -17,6 +17,7 @@ import {
   SUBSCRIPTION_PLANS_SEED,
 } from '../constants/subscriptionPlans.data';
 import { formatRazorpayContact, razorpayService } from './razorpay.service';
+import { ENV } from '../config/env';
 import { addMonths, toRupeesPaise } from '../utils/subscription.util';
 import { calculateGstBreakdown } from '../utils/gst.util';
 import { endFreeTrialForUser } from '../utils/freeTrial.util';
@@ -304,7 +305,13 @@ export const subscriptionService = {
     const gst = calculateGstBreakdown(plan.amount);
 
     active.status = LibrarySubscriptionStatus.EXPIRED;
-    await active.save();
+    await Subscription.updateOne(
+      { _id: active._id },
+      {
+        $set: { status: LibrarySubscriptionStatus.EXPIRED },
+        $unset: { razorpaySubscriptionId: 1 },
+      }
+    );
 
     const renewal = await Subscription.create({
       userId: active.userId,
@@ -348,6 +355,14 @@ export const subscriptionService = {
     subscriptionId: string;
     paymentUrl: string;
     isRecurring: true;
+    checkout: {
+      key: string;
+      subscription_id: string;
+      name: string;
+      description: string;
+      callback_url: string;
+      prefill: { name: string; email: string; contact: string };
+    };
   }> {
     if (!mongoose.Types.ObjectId.isValid(planId)) {
       throw new ApiError(400, MESSAGES.VALIDATION_ERROR);
@@ -418,6 +433,8 @@ export const subscriptionService = {
     const razorpaySub = await razorpayService.createSubscription({
       planId: razorpayPlanId,
       customerId: customer.id,
+      notifyEmail: user.email,
+      notifyPhone: formatRazorpayContact(user.mobileNumber),
       notes: {
         userId,
         planId: String(plan._id),
@@ -459,8 +476,21 @@ export const subscriptionService = {
       currency: plan.currency ?? 'INR',
       key: razorpayService.getPublicKey(),
       subscriptionId: subscription._id.toString(),
-      paymentUrl: razorpaySub.short_url,
+      paymentUrl: razorpaySub.short_url ?? '',
       isRecurring: true,
+      /** Use Razorpay Checkout with subscription_id — NOT order_id — for auto-debit mandate. */
+      checkout: {
+        key: razorpayService.getPublicKey(),
+        subscription_id: razorpaySub.id,
+        name: 'Bridgr Library Subscription',
+        description: plan.name,
+        callback_url: ENV.RAZORPAY_PAYMENT_CALLBACK_URL,
+        prefill: {
+          name: user.fullName,
+          email: user.email,
+          contact: formatRazorpayContact(user.mobileNumber),
+        },
+      },
     };
   },
 
@@ -694,6 +724,41 @@ export const subscriptionService = {
   async getCurrentSubscription(userId: string) {
     await this.syncPendingSubscriptionFromRazorpay(userId);
     return this.findActiveSubscription(userId, true);
+  },
+
+  /** Debug Razorpay recurring status for the logged-in user. */
+  async getRecurringStatus(userId: string) {
+    const local = await Subscription.findOne({
+      userId,
+      razorpaySubscriptionId: { $exists: true, $ne: '' },
+    })
+      .sort({ createdAt: -1 })
+      .populate('planId');
+
+    if (!local?.razorpaySubscriptionId) {
+      return {
+        hasRecurring: false,
+        message: 'No Razorpay subscription linked. Pay via subscription checkout (subscription_id), not one-time order.',
+      };
+    }
+
+    const rz = await razorpayService.fetchSubscription(local.razorpaySubscriptionId);
+    const recurringActive = ['active', 'authenticated'].includes(rz.status);
+
+    return {
+      hasRecurring: true,
+      localStatus: local.status,
+      localPaymentStatus: local.paymentStatus,
+      razorpaySubscriptionId: local.razorpaySubscriptionId,
+      razorpayStatus: rz.status,
+      paidCount: rz.paid_count ?? 0,
+      remainingCount: rz.remaining_count ?? 0,
+      chargeAt: rz.charge_at ? new Date(rz.charge_at * 1000).toISOString() : null,
+      recurringActive,
+      message: recurringActive
+        ? 'Auto-debit mandate is active. Razorpay will charge on schedule.'
+        : `Razorpay subscription is "${rz.status}" — auto-debit will not run until active/authenticated.`,
+    };
   },
 
   async getSubscriptionHistory(userId: string) {

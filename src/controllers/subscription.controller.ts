@@ -52,6 +52,11 @@ export const subscriptionController = {
     res.status(200).json(new ApiResponse(200, MESSAGES.SUBSCRIPTION_HISTORY_FETCHED, history));
   }),
 
+  getRecurringStatus: asyncHandler(async (req: Request, res: Response) => {
+    const status = await subscriptionService.getRecurringStatus(getAuthUserId(req));
+    res.status(200).json(new ApiResponse(200, MESSAGES.SUBSCRIPTION_FETCHED, status));
+  }),
+
   /** Razorpay subscription redirect after successful payment — no auth (signature verified). */
   paymentCallback: asyncHandler(async (req: Request, res: Response) => {
     const subscription = await subscriptionService.handleSubscriptionCallback(

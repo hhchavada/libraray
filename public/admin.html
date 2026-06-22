@@ -104,8 +104,13 @@
     table { width: 100%; border-collapse: collapse; font-size: .875rem; }
     th { padding: 12px 18px; text-align: left; font-size: .7rem; font-weight: 700; color: var(--muted); text-transform: uppercase; letter-spacing: .05em; background: var(--bg); border-bottom: 1px solid var(--border); white-space: nowrap; }
     td { padding: 14px 18px; border-bottom: 1px solid var(--border); vertical-align: middle; }
-    tr:last-child td { border-bottom: none; }
-    tbody tr:hover td { background: var(--primary-light); }
+    tr.row-clickable { cursor: pointer; }
+    tr.row-clickable:hover td { background: var(--primary-light); }
+    .btn-link { background: none; border: none; color: var(--primary); cursor: pointer; font-weight: 600; font-family: inherit; font-size: .875rem; padding: 0; }
+    .btn-link:hover { text-decoration: underline; }
+    .detail-header { display: flex; justify-content: space-between; align-items: flex-start; gap: 16px; margin-bottom: 20px; flex-wrap: wrap; }
+    .detail-meta { color: var(--muted); font-size: .875rem; line-height: 1.6; }
+    .detail-meta strong { color: var(--text); }
     .two-col { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
 
     /* Badges */
@@ -243,6 +248,7 @@
     const API = '/api/v1';
     const TOKEN_KEY = 'admin_access_token';
     let currentSection = 'overview';
+    let selectedLibraryId = null;
     let filterOptions = {};
 
     const $ = (id) => document.getElementById(id);
@@ -315,6 +321,80 @@
       </div>`;
     }
 
+    function memberTypeBadge(type) {
+      const map = { permanent: 'badge-active', demo: 'badge-demo', 'without-seat': 'badge-grace' };
+      return `<span class="badge ${map[type] || ''}">${(type || '—').replace('-', ' ')}</span>`;
+    }
+
+    function statusBadge(status) {
+      const map = { active: 'badge-active', expired: 'badge-terminated', inactive: 'badge-terminated' };
+      return `<span class="badge ${map[status] || 'badge-grace'}">${status || '—'}</span>`;
+    }
+
+    async function renderLibraryDetail(libraryId) {
+      const res = await api('/admin/libraries/' + libraryId);
+      const d = res.data;
+      $('pageTitle').textContent = d.libraryName;
+      $('breadcrumbSection').textContent = 'Libraries / ' + d.libraryName;
+
+      const kpis = `<div class="stats">
+        ${kpiCard('blue','🎓','Total Students', d.members.total, `${d.members.active} active`)}
+        ${kpiCard('green','✅','Permanent', d.members.permanent)}
+        ${kpiCard('purple','🆓','Demo', d.members.demo)}
+        ${kpiCard('amber','🪑','Without Seat', d.members.withoutSeat)}
+        ${kpiCard('blue','💺','Seats', `${d.seats.booked}/${d.seats.total}`, `${d.seats.available} available`)}
+        ${kpiCard('green','💰','Collected', formatMoney(d.revenue.totalCollected), `${formatMoney(d.revenue.totalDue)} due`)}
+      </div>`;
+
+      const header = `<div class="detail-header">
+        <div>
+          <button class="btn btn-outline" onclick="backToLibraries()">← Back to Libraries</button>
+          <h3 style="margin-top:16px;font-size:1.25rem">${d.libraryName}</h3>
+          <div class="detail-meta" style="margin-top:8px">
+            <div>${d.address || '—'}</div>
+            <div>Owner: <strong>${d.owner?.fullName || '—'}</strong> · ${d.owner?.email || '—'} · ${d.owner?.mobileNumber || '—'}</div>
+            <div>Status: ${d.isActive ? '<span class="badge badge-active">Active</span>' : '<span class="badge badge-terminated">Inactive</span>'}</div>
+          </div>
+        </div>
+      </div>`;
+
+      const memberRows = (d.membersList || []).length
+        ? d.membersList.map(m => `<tr>
+            <td><code style="font-size:.75rem">${m.memberId}</code></td>
+            <td><strong>${m.fullName}</strong></td>
+            <td>${m.mobileNumber}</td>
+            <td>${memberTypeBadge(m.memberType)}</td>
+            <td>${m.shiftType || '—'}</td>
+            <td>${m.seatNumber ?? '—'}</td>
+            <td>${m.membershipPlan || '—'}</td>
+            <td>${statusBadge(m.status)}</td>
+            <td style="font-weight:600;color:var(--success)">${formatMoney(m.amountPaid)}</td>
+            <td style="color:${m.dueAmount > 0 ? 'var(--danger)' : 'var(--muted)'}">${formatMoney(m.dueAmount)}</td>
+          </tr>`).join('')
+        : emptyTable(10, 'No students in this library');
+
+      return header + kpis + wrapTable(
+        `Students (${d.membersList?.length || 0})`,
+        ['ID', 'Name', 'Mobile', 'Type', 'Shift', 'Seat', 'Plan', 'Status', 'Paid', 'Due'],
+        memberRows
+      );
+    }
+
+    window.openLibraryDetail = (libraryId) => {
+      selectedLibraryId = libraryId;
+      currentSection = 'libraries';
+      document.querySelectorAll('.nav-item').forEach(b => b.classList.remove('active'));
+      document.querySelector('.nav-item[data-section="libraries"]')?.classList.add('active');
+      loadSection();
+    };
+
+    window.backToLibraries = () => {
+      selectedLibraryId = null;
+      $('pageTitle').textContent = titles.libraries;
+      $('breadcrumbSection').textContent = titles.libraries;
+      loadSection();
+    };
+
     function wrapTable(title, headers, rows, actions) {
       return `<div class="card"><div class="card-header"><h3>${title}</h3>${actions || ''}</div><div class="card-body table-wrap"><table><thead><tr>${headers.map(h=>`<th>${h}</th>`).join('')}</tr></thead><tbody>${rows}</tbody></table></div></div>`;
     }
@@ -368,11 +448,19 @@
         const badge = s => ({demo:'badge-demo',active:'badge-active',grace_period:'badge-grace',terminated:'badge-terminated'}[s]||'');
         let rows = '';
         for (const [status, libs] of Object.entries(d.libraries||{})) {
-          (libs||[]).forEach(l => { rows += `<tr><td><strong>${l.libraryName}</strong></td><td>${l.city}, ${l.state}</td><td>${l.owner.fullName}</td><td><span class="badge ${badge(status)}">${status.replace('_',' ')}</span></td></tr>`; });
+          (libs||[]).forEach(l => {
+            rows += `<tr class="row-clickable" onclick="openLibraryDetail('${l.libraryId}')">
+              <td><strong>${l.libraryName}</strong></td>
+              <td>${l.city}, ${l.state}</td>
+              <td>${l.owner.fullName}</td>
+              <td><span class="badge ${badge(status)}">${status.replace('_',' ')}</span></td>
+              <td><button class="btn-link" onclick="event.stopPropagation();openLibraryDetail('${l.libraryId}')">View students →</button></td>
+            </tr>`;
+          });
         }
-        if (!rows) rows = emptyTable(4,'No libraries found');
+        if (!rows) rows = emptyTable(5,'No libraries found');
         return renderKpis({totalRevenue:0,monthlyRevenue:0,annualRevenue:0,activeSubscriptions:0,expiredSubscriptions:0,revenueGrowthPercent:0},{demo:d.summary.demo,active:d.summary.active,gracePeriod:d.summary.gracePeriod,terminated:d.summary.terminated})
-          + wrapTable('Libraries by Status',['Library','Location','Owner','Status'],rows);
+          + wrapTable('Libraries by Status',['Library','Location','Owner','Status',''],rows);
       },
       transactions: async () => {
         const res = await api('/admin/transactions?' + getFilters());
@@ -411,11 +499,20 @@
         return cards + wrapTable('Renewal Forecast',['Library','Owner','Plan','Amount','Expiry','Days Left'],rows);
       },
       libraries: async () => {
+        if (selectedLibraryId) return renderLibraryDetail(selectedLibraryId);
         const res = await api('/admin/dashboard');
         const rows = (res.data.libraries||[]).length
-          ? res.data.libraries.map(l=>`<tr><td><strong>${l.libraryName}</strong><br><span style="color:var(--muted);font-size:.78rem">${l.address}</span></td><td>${l.owner?.fullName||'—'}</td><td>${l.members.total} <span style="color:var(--muted)">(${l.members.active} active)</span></td><td>${l.seats.booked}/${l.seats.total}</td><td style="color:var(--success);font-weight:600">${formatMoney(l.revenue.totalCollected)}</td><td><span class="badge ${l.isActive?'badge-active':'badge-terminated'}">${l.isActive?'Active':'Inactive'}</span></td></tr>`).join('')
-          : emptyTable(6,'No libraries');
-        return wrapTable('All Libraries',['Library','Owner','Members','Seats','Revenue','Status'],rows);
+          ? res.data.libraries.map(l=>`<tr class="row-clickable" onclick="openLibraryDetail('${l.libraryId}')">
+              <td><strong>${l.libraryName}</strong><br><span style="color:var(--muted);font-size:.78rem">${l.address}</span></td>
+              <td>${l.owner?.fullName||'—'}</td>
+              <td>${l.members.total} <span style="color:var(--muted)">(${l.members.active} active)</span></td>
+              <td>${l.seats.booked}/${l.seats.total}</td>
+              <td style="color:var(--success);font-weight:600">${formatMoney(l.revenue.totalCollected)}</td>
+              <td><span class="badge ${l.isActive?'badge-active':'badge-terminated'}">${l.isActive?'Active':'Inactive'}</span></td>
+              <td><button class="btn-link" onclick="event.stopPropagation();openLibraryDetail('${l.libraryId}')">View students →</button></td>
+            </tr>`).join('')
+          : emptyTable(7,'No libraries');
+        return wrapTable('All Libraries — click a row to view students',['Library','Owner','Students','Seats','Revenue','Status',''],rows);
       },
       import: async () => {
         const dash = await api('/admin/dashboard');
@@ -519,6 +616,7 @@
         document.querySelectorAll('.nav-item').forEach(b => b.classList.remove('active'));
         btn.classList.add('active');
         currentSection = btn.dataset.section;
+        selectedLibraryId = null;
         $('pageTitle').textContent = titles[currentSection] || currentSection;
         $('breadcrumbSection').textContent = titles[currentSection] || currentSection;
         loadSection();

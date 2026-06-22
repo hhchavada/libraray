@@ -1,0 +1,170 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Bridgr — Subscription Checkout</title>
+  <script src="https://checkout.razorpay.com/v1/checkout.js"></script>
+  <style>
+    body { font-family: system-ui, sans-serif; max-width: 520px; margin: 40px auto; padding: 0 16px; color: #0f172a; }
+    .card { border: 1px solid #e2e8f0; border-radius: 12px; padding: 24px; margin-bottom: 16px; }
+    label { display: block; font-size: 12px; font-weight: 600; color: #64748b; margin-bottom: 6px; }
+    input, select { width: 100%; padding: 12px; border: 1px solid #e2e8f0; border-radius: 8px; margin-bottom: 14px; }
+    button { width: 100%; padding: 14px; border: none; border-radius: 8px; background: #6366f1; color: #fff; font-weight: 600; cursor: pointer; }
+    button:disabled { opacity: .6; cursor: not-allowed; }
+    .error { background: #fef2f2; color: #b91c1c; padding: 12px; border-radius: 8px; margin-bottom: 12px; }
+    .success { background: #ecfdf5; color: #059669; padding: 12px; border-radius: 8px; margin-bottom: 12px; }
+    .hint { font-size: 13px; color: #64748b; line-height: 1.5; }
+    .hidden { display: none !important; }
+    code { background: #f1f5f9; padding: 2px 6px; border-radius: 4px; }
+  </style>
+</head>
+<body>
+  <h1>Recurring Subscription Test</h1>
+  <p class="hint">Uses <code>subscription_id</code> in Razorpay Checkout — required for monthly auto-debit mandate. Do <strong>not</strong> use <code>order_id</code>.</p>
+
+  <div id="msg"></div>
+
+  <div class="card" id="loginCard">
+    <label>Email</label>
+    <input id="email" type="email" placeholder="owner@library.com" />
+    <label>Password</label>
+    <input id="password" type="password" />
+    <button id="loginBtn">Login</button>
+  </div>
+
+  <div class="card hidden" id="payCard">
+    <label>Plan</label>
+    <select id="planSelect"></select>
+    <button id="payBtn">Pay with Auto-debit (Recurring)</button>
+    <button id="statusBtn" style="margin-top:10px;background:#0f172a">Check Recurring Status</button>
+    <button id="logoutBtn" style="margin-top:10px;background:#64748b">Logout</button>
+  </div>
+
+  <script>
+    const API = '/api/v1';
+    const TOKEN_KEY = 'sub_test_token';
+    const $ = (id) => document.getElementById(id);
+
+    const show = (html, type) => {
+      $('msg').innerHTML = `<div class="${type}">${html}</div>`;
+    };
+
+    async function api(path, options = {}) {
+      const headers = { 'Content-Type': 'application/json', ...(options.headers || {}) };
+      const token = localStorage.getItem(TOKEN_KEY);
+      if (token) headers.Authorization = 'Bearer ' + token;
+      const res = await fetch(API + path, { ...options, headers });
+      const json = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(json.message || res.statusText);
+      return json;
+    }
+
+    function showPayCard() {
+      $('loginCard').classList.add('hidden');
+      $('payCard').classList.remove('hidden');
+    }
+
+    async function loadPlans() {
+      const res = await api('/subscription/plans');
+      const groups = res.data || {};
+      const opts = [];
+      for (const [cat, plans] of Object.entries(groups)) {
+        (plans || []).forEach(p => {
+          if (p.durationType === 'monthly') {
+            opts.push(`<option value="${p._id}">${cat} — ${p.name} (₹${p.amount}/mo auto-debit)</option>`);
+          }
+        });
+      }
+      $('planSelect').innerHTML = opts.join('') || '<option value="">No monthly plans</option>';
+    }
+
+    async function login() {
+      try {
+        const res = await api('/auth/login', {
+          method: 'POST',
+          body: JSON.stringify({ email: $('email').value.trim(), password: $('password').value }),
+        });
+        localStorage.setItem(TOKEN_KEY, res.data.accessToken);
+        await loadPlans();
+        showPayCard();
+        show('Logged in. Select a monthly plan and pay.', 'success');
+      } catch (e) {
+        show(e.message, 'error');
+      }
+    }
+
+    async function pay() {
+      $('payBtn').disabled = true;
+      try {
+        const planId = $('planSelect').value;
+        if (!planId) throw new Error('Select a plan');
+
+        const order = await api('/subscription/create-order', {
+          method: 'POST',
+          body: JSON.stringify({ planId, confirmReplace: true }),
+        });
+        const d = order.data;
+        const checkout = d.checkout || {};
+
+        const options = {
+          key: checkout.key || d.key,
+          subscription_id: checkout.subscription_id || d.razorpaySubscriptionId,
+          name: checkout.name || 'Bridgr',
+          description: checkout.description || 'Monthly auto-debit subscription',
+          callback_url: checkout.callback_url,
+          prefill: checkout.prefill || {},
+          theme: { color: '#6366f1' },
+          handler: async function (response) {
+            try {
+              await api('/subscription/verify-payment', {
+                method: 'POST',
+                body: JSON.stringify({
+                  razorpay_subscription_id: response.razorpay_subscription_id,
+                  razorpay_payment_id: response.razorpay_payment_id,
+                  razorpay_signature: response.razorpay_signature,
+                }),
+              });
+              show('Payment verified. Auto-debit mandate should be active — check recurring status.', 'success');
+            } catch (e) {
+              show('Payment done but verify failed: ' + e.message, 'error');
+            }
+          },
+        };
+
+        const rzp = new Razorpay(options);
+        rzp.on('payment.failed', (r) => show(r.error.description || 'Payment failed', 'error'));
+        rzp.open();
+      } catch (e) {
+        show(e.message, 'error');
+      } finally {
+        $('payBtn').disabled = false;
+      }
+    }
+
+    async function checkStatus() {
+      try {
+        const res = await api('/subscription/recurring-status');
+        const s = res.data;
+        show(
+          `<strong>${s.message}</strong><br>` +
+          `Razorpay status: <code>${s.razorpayStatus || '—'}</code><br>` +
+          `Paid cycles: ${s.paidCount ?? 0} · Next charge: ${s.chargeAt || '—'}`,
+          s.recurringActive ? 'success' : 'error'
+        );
+      } catch (e) {
+        show(e.message, 'error');
+      }
+    }
+
+    $('loginBtn').onclick = login;
+    $('payBtn').onclick = pay;
+    $('statusBtn').onclick = checkStatus;
+    $('logoutBtn').onclick = () => { localStorage.removeItem(TOKEN_KEY); location.reload(); };
+
+    if (localStorage.getItem(TOKEN_KEY)) {
+      loadPlans().then(showPayCard);
+    }
+  </script>
+</body>
+</html>

@@ -41,6 +41,21 @@ export interface CreateRazorpaySubscriptionInput {
   planId: string;
   customerId?: string;
   notes?: Record<string, string>;
+  notifyEmail?: string;
+  notifyPhone?: string;
+}
+
+export interface RazorpaySubscriptionDetails {
+  id: string;
+  status: string;
+  plan_id?: string;
+  paid_count?: number;
+  remaining_count?: number;
+  charge_at?: number;
+  current_start?: number;
+  current_end?: number;
+  ended_at?: number | null;
+  short_url?: string;
 }
 
 /** Format Indian mobile for Razorpay (e.g. +919876543210). */
@@ -91,26 +106,15 @@ export const razorpayService = {
   },
 
   async findOrCreateCustomer(input: CreateRazorpayCustomerInput) {
-    const client = getRazorpayClient();
+    logger.info(LOG_TAG, 'Finding or creating Razorpay customer', { email: input.email });
 
-    const existing = (await client.customers.all({ count: 10 })) as {
-      items?: Array<{ id: string; email?: string }>;
-    };
-    const match = existing.items?.find(
-      (c) => c.email?.toLowerCase() === input.email.toLowerCase()
-    );
-    if (match) {
-      return match;
-    }
-
-    logger.info(LOG_TAG, 'Creating Razorpay customer', { email: input.email });
-
-    return client.customers.create({
+    // fail_existing: 0 returns the existing customer when email/contact already exists.
+    return getRazorpayClient().customers.create({
       name: input.name,
       email: input.email,
       contact: input.contact,
       fail_existing: 0,
-    });
+    }) as Promise<{ id: string }>;
   },
 
   async createSubscription(input: CreateRazorpaySubscriptionInput) {
@@ -125,21 +129,32 @@ export const razorpayService = {
       customer_notify: 0 | 1;
       notes?: Record<string, string>;
       customer_id?: string;
+      expire_by?: number;
+      notify_info?: { notify_email?: string; notify_phone?: string };
     } = {
       plan_id: input.planId,
       // High cycle count — effectively runs until user/admin cancels.
       total_count: 1200,
       customer_notify: 1,
       notes: input.notes,
+      // Hosted checkout link valid for 30 days.
+      expire_by: Math.floor(Date.now() / 1000) + 30 * 24 * 60 * 60,
     };
 
     if (input.customerId) {
       payload.customer_id = input.customerId;
     }
 
+    if (input.notifyEmail || input.notifyPhone) {
+      payload.notify_info = {
+        notify_email: input.notifyEmail,
+        notify_phone: input.notifyPhone,
+      };
+    }
+
     const subscription = (await getRazorpayClient().subscriptions.create(
       payload
-    )) as unknown as { id?: string; short_url?: string };
+    )) as unknown as RazorpaySubscriptionDetails;
 
     if (!subscription.id) {
       logger.error(LOG_TAG, 'Razorpay subscription create returned no id', { subscription });
@@ -151,7 +166,7 @@ export const razorpayService = {
       shortUrl: subscription.short_url,
     });
 
-    return subscription as { id: string; short_url: string };
+    return subscription;
   },
 
   async cancelSubscription(razorpaySubscriptionId: string, cancelAtCycleEnd = false) {
@@ -166,10 +181,9 @@ export const razorpayService = {
     );
   },
 
-  async fetchSubscription(razorpaySubscriptionId: string) {
-    return getRazorpayClient().subscriptions.fetch(
-      razorpaySubscriptionId
-    ) as Promise<{ id: string; status: string }>;
+  async fetchSubscription(razorpaySubscriptionId: string): Promise<RazorpaySubscriptionDetails> {
+    const sub = await getRazorpayClient().subscriptions.fetch(razorpaySubscriptionId);
+    return sub as unknown as RazorpaySubscriptionDetails;
   },
 
   async fetchLatestPaidPaymentForSubscription(
