@@ -235,7 +235,8 @@
               </select>
             </div>
             <div class="filter-group"><label>Sales Executive</label><select id="filterExecutive"><option value="">All Executives</option></select></div>
-            <div class="filter-group"><label>Search</label><input type="search" id="filterSearch" placeholder="Library, city..." /></div>
+            <div class="filter-group"><label>Library ID</label><select id="filterLibrary"><option value="">All Libraries</option></select></div>
+            <div class="filter-group"><label>Search</label><input type="search" id="filterSearch" placeholder="Library, city, BRD-0001..." /></div>
           </div>
         </div>
 
@@ -279,11 +280,13 @@
       const city = $('filterCity').value;
       const plan = $('filterPlan').value;
       const exec = $('filterExecutive').value;
+      const libraryCode = $('filterLibrary').value;
       const search = $('filterSearch').value.trim();
       if (state) q.set('state', state);
       if (city) q.set('city', city);
       if (plan) q.set('planCategory', plan);
       if (exec && /^[a-f0-9]{24}$/i.test(exec)) q.set('executiveId', exec);
+      if (libraryCode) q.set('libraryCode', libraryCode);
       if (search) q.set('search', search);
       return q.toString();
     };
@@ -351,6 +354,8 @@
           <button class="btn btn-outline" onclick="backToLibraries()">← Back to Libraries</button>
           <h3 style="margin-top:16px;font-size:1.25rem">${d.libraryName}</h3>
           <div class="detail-meta" style="margin-top:8px">
+            <div>Library ID: <strong><code>${d.libraryCode || '—'}</code></strong></div>
+            <div>Subscription: <strong>${d.subscriptionPlan?.name || '—'}</strong>${d.subscriptionPlan?.endDate ? ` · expires ${new Date(d.subscriptionPlan.endDate).toLocaleDateString('en-IN')}` : ''}</div>
             <div>${d.address || '—'}</div>
             <div>Owner: <strong>${d.owner?.fullName || '—'}</strong> · ${d.owner?.email || '—'} · ${d.owner?.mobileNumber || '—'}</div>
             <div>Status: ${d.isActive ? '<span class="badge badge-active">Active</span>' : '<span class="badge badge-terminated">Inactive</span>'}</div>
@@ -404,6 +409,7 @@
       filterOptions = res.data;
       $('filterState').innerHTML = '<option value="">All States</option>' + (filterOptions.states||[]).map(s=>`<option value="${s}">${s}</option>`).join('');
       $('filterExecutive').innerHTML = '<option value="">All Executives</option>' + (filterOptions.executives||[]).map(e=>`<option value="${e.id}">${e.fullName}</option>`).join('');
+      $('filterLibrary').innerHTML = '<option value="">All Libraries</option>' + (filterOptions.libraries||[]).map(l=>`<option value="${l.libraryCode}">${l.libraryCode} — ${l.libraryName}</option>`).join('');
     }
 
     async function loadCities() {
@@ -450,33 +456,35 @@
         for (const [status, libs] of Object.entries(d.libraries||{})) {
           (libs||[]).forEach(l => {
             rows += `<tr class="row-clickable" onclick="openLibraryDetail('${l.libraryId}')">
+              <td><code style="font-size:.75rem">${l.libraryCode || '—'}</code></td>
               <td><strong>${l.libraryName}</strong></td>
               <td>${l.city}, ${l.state}</td>
+              <td>${l.activePlanName || '—'}</td>
               <td>${l.owner.fullName}</td>
               <td><span class="badge ${badge(status)}">${status.replace('_',' ')}</span></td>
               <td><button class="btn-link" onclick="event.stopPropagation();openLibraryDetail('${l.libraryId}')">View students →</button></td>
             </tr>`;
           });
         }
-        if (!rows) rows = emptyTable(5,'No libraries found');
+        if (!rows) rows = emptyTable(7,'No libraries found');
         return renderKpis({totalRevenue:0,monthlyRevenue:0,annualRevenue:0,activeSubscriptions:0,expiredSubscriptions:0,revenueGrowthPercent:0},{demo:d.summary.demo,active:d.summary.active,gracePeriod:d.summary.gracePeriod,terminated:d.summary.terminated})
-          + wrapTable('Libraries by Status',['Library','Location','Owner','Status',''],rows);
+          + wrapTable('Libraries by Status',['ID','Library','Location','Plan','Owner','Status',''],rows);
       },
       transactions: async () => {
         const res = await api('/admin/transactions?' + getFilters());
         const d = res.data;
         const actions = `<div style="display:flex;gap:8px"><button class="btn btn-outline" onclick="exportTx('excel')">⬇ Excel</button><button class="btn btn-outline" onclick="exportTx('csv')">⬇ CSV</button></div>`;
         const rows = (d.transactions||[]).length
-          ? d.transactions.map(t=>`<tr><td><code style="font-size:.75rem">${(t.transactionId||'—').slice(0,16)}</code></td><td><strong>${t.libraryName}</strong></td><td>${t.ownerName}</td><td>${new Date(t.paymentDate).toLocaleDateString('en-IN')}</td><td>${t.planName}</td><td style="font-weight:600">${formatMoney(t.grossAmount)}</td><td>${formatMoney(t.gstAmount)}</td><td style="color:var(--success);font-weight:600">${formatMoney(t.netSettlementAmount)}</td><td><span class="badge badge-paid">${t.paymentStatus}</span></td></tr>`).join('')
-          : emptyTable(9,'No transactions in this period');
-        return wrapTable(`Payment Transactions <span style="font-weight:400;color:var(--muted);font-size:.8rem">(${d.totalCount} total)</span>`,['Txn ID','Library','Owner','Date','Plan','Gross','GST','Net','Status'],rows,actions);
+          ? d.transactions.map(t=>`<tr><td><code style="font-size:.75rem">${(t.transactionId||'—').slice(0,16)}</code></td><td><code style="font-size:.75rem">${t.libraryCode || '—'}</code></td><td><strong>${t.libraryName}</strong></td><td>${t.ownerName}</td><td>${new Date(t.paymentDate).toLocaleDateString('en-IN')}</td><td>${t.planName}</td><td style="font-weight:600">${formatMoney(t.grossAmount)}</td><td>${formatMoney(t.gstAmount)}</td><td style="color:var(--success);font-weight:600">${formatMoney(t.netSettlementAmount)}</td><td><span class="badge badge-paid">${t.paymentStatus}</span></td></tr>`).join('')
+          : emptyTable(10,'No transactions in this period');
+        return wrapTable(`Payment Transactions <span style="font-weight:400;color:var(--muted);font-size:.8rem">(${d.totalCount} total)</span>`,['Txn ID','Lib ID','Library','Owner','Date','Plan','Gross','GST','Net','Status'],rows,actions);
       },
       resources: async () => {
         const res = await api('/admin/analytics/resource-usage?' + getFilters());
         const rows = (res.data||[]).length
-          ? res.data.map(r=>`<tr><td><strong>${r.libraryName}</strong></td><td>${r.planType}</td><td>${r.studentsCount}</td><td>${r.seatsCount}</td><td>${r.smsSent}</td><td>${r.whatsappMessagesSent}</td><td>${formatMoney(r.estimatedMonthlyCost)}</td></tr>`).join('')
-          : emptyTable(7,'No resource data');
-        return wrapTable('Resource Usage by Library',['Library','Plan','Students','Seats','SMS','WhatsApp','Est. Cost'],rows);
+          ? res.data.map(r=>`<tr><td><code style="font-size:.75rem">${r.libraryCode || '—'}</code></td><td><strong>${r.libraryName}</strong></td><td>${r.planType}</td><td>${r.studentsCount}</td><td>${r.seatsCount}</td><td>${r.smsSent}</td><td>${r.whatsappMessagesSent}</td><td>${formatMoney(r.estimatedMonthlyCost)}</td></tr>`).join('')
+          : emptyTable(8,'No resource data');
+        return wrapTable('Resource Usage by Library',['ID','Library','Plan','Students','Seats','SMS','WhatsApp','Est. Cost'],rows);
       },
       executives: async () => {
         const res = await api('/admin/analytics/executives?' + getFilters());
@@ -494,16 +502,18 @@
           ${kpiCard('red','⏰','Next 30 Days', d.cards.next30Days?.count??0, formatMoney(d.cards.next30Days?.estimatedRevenue??0))}
         </div>`;
         const rows = (d.forecast||[]).length
-          ? d.forecast.map(r=>`<tr><td><strong>${r.libraryName}</strong></td><td>${r.ownerName}</td><td>${r.planType}</td><td style="font-weight:600">${formatMoney(r.currentPlanAmount)}</td><td>${new Date(r.expiryDate).toLocaleDateString('en-IN')}</td><td><span class="badge ${r.daysRemaining<=7?'badge-terminated':'badge-grace'}">${r.daysRemaining} days</span></td></tr>`).join('')
-          : emptyTable(6,'No upcoming renewals');
-        return cards + wrapTable('Renewal Forecast',['Library','Owner','Plan','Amount','Expiry','Days Left'],rows);
+          ? d.forecast.map(r=>`<tr><td><code style="font-size:.75rem">${r.libraryCode || '—'}</code></td><td><strong>${r.libraryName}</strong></td><td>${r.ownerName}</td><td>${r.planType}</td><td style="font-weight:600">${formatMoney(r.currentPlanAmount)}</td><td>${new Date(r.expiryDate).toLocaleDateString('en-IN')}</td><td><span class="badge ${r.daysRemaining<=7?'badge-terminated':'badge-grace'}">${r.daysRemaining} days</span></td></tr>`).join('')
+          : emptyTable(7,'No upcoming renewals');
+        return cards + wrapTable('Renewal Forecast',['ID','Library','Owner','Plan','Amount','Expiry','Days Left'],rows);
       },
       libraries: async () => {
         if (selectedLibraryId) return renderLibraryDetail(selectedLibraryId);
-        const res = await api('/admin/dashboard');
+        const res = await api('/admin/dashboard?' + getFilters());
         const rows = (res.data.libraries||[]).length
           ? res.data.libraries.map(l=>`<tr class="row-clickable" onclick="openLibraryDetail('${l.libraryId}')">
+              <td><code style="font-size:.75rem">${l.libraryCode || '—'}</code></td>
               <td><strong>${l.libraryName}</strong><br><span style="color:var(--muted);font-size:.78rem">${l.address}</span></td>
+              <td>${l.subscriptionPlan?.name || '—'}<br><span style="color:var(--muted);font-size:.78rem">${l.subscriptionPlan?.category || ''}</span></td>
               <td>${l.owner?.fullName||'—'}</td>
               <td>${l.members.total} <span style="color:var(--muted)">(${l.members.active} active)</span></td>
               <td>${l.seats.booked}/${l.seats.total}</td>
@@ -511,13 +521,13 @@
               <td><span class="badge ${l.isActive?'badge-active':'badge-terminated'}">${l.isActive?'Active':'Inactive'}</span></td>
               <td><button class="btn-link" onclick="event.stopPropagation();openLibraryDetail('${l.libraryId}')">View students →</button></td>
             </tr>`).join('')
-          : emptyTable(7,'No libraries');
-        return wrapTable('All Libraries — click a row to view students',['Library','Owner','Students','Seats','Revenue','Status',''],rows);
+          : emptyTable(9,'No libraries');
+        return wrapTable('All Libraries — click a row to view students',['ID','Library','Subscription Plan','Owner','Students','Seats','Revenue','Status',''],rows);
       },
       import: async () => {
-        const dash = await api('/admin/dashboard');
+        const dash = await api('/admin/dashboard?' + getFilters());
         const libs = dash.data.libraries || [];
-        const opts = libs.map(l=>`<option value="${l.libraryId}">${l.libraryName}</option>`).join('');
+        const opts = libs.map(l=>`<option value="${l.libraryId}">${l.libraryCode || l.libraryId} — ${l.libraryName}</option>`).join('');
         return `<div class="card" style="padding:28px">
           <h3 style="font-size:1.1rem;margin-bottom:8px">Import Members via Excel</h3>
           <p style="color:var(--muted);font-size:.875rem;margin-bottom:12px">Required columns: <code>fullName</code>, <code>mobileNumber</code>, <code>shiftType</code>, <code>startDate</code>, <code>type</code></p>
@@ -634,7 +644,7 @@
       loadSection();
     };
 
-    ['filterDate','filterState','filterCity','filterPlan','filterExecutive','filterFrom','filterTo'].forEach(id => {
+    ['filterDate','filterState','filterCity','filterPlan','filterExecutive','filterLibrary','filterFrom','filterTo'].forEach(id => {
       $(id)?.addEventListener('change', () => onFilterChange(id));
     });
     $('filterSearch')?.addEventListener('input', () => { clearTimeout(window._st); window._st = setTimeout(loadSection, 400); });
