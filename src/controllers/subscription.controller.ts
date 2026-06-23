@@ -35,14 +35,16 @@ export const subscriptionController = {
 
   getCurrent: asyncHandler(async (req: Request, res: Response) => {
     const userId = getAuthUserId(req);
-    const [subscription, freeTrial] = await Promise.all([
+    const [subscription, freeTrial, recurring] = await Promise.all([
       subscriptionService.getCurrentSubscription(userId),
       getFreeTrialForUserId(userId),
+      subscriptionService.getRecurringStatus(userId),
     ]);
     res.status(200).json(
       new ApiResponse(200, MESSAGES.SUBSCRIPTION_FETCHED, {
         subscription,
         freeTrial,
+        recurring,
       })
     );
   }),

@@ -118,10 +118,11 @@ const subscriptionOrderScript = {
       'if (pm.response.code === 201) {',
       '  const d = pm.response.json().data;',
       '  if (d) {',
-      "    if (d.orderId) pm.collectionVariables.set('razorpayOrderId', d.orderId);",
+      "    if (d.razorpaySubscriptionId) pm.collectionVariables.set('razorpaySubscriptionId', d.razorpaySubscriptionId);",
       "    if (d.subscriptionId) pm.collectionVariables.set('subscriptionId', d.subscriptionId);",
       "    if (d.key) pm.collectionVariables.set('razorpayKey', d.key);",
-      '    if (d.paymentUrl) console.log("Open payment URL:", d.paymentUrl);',
+      '    const url = d.subscriptionAuthUrl || d.paymentUrl;',
+      '    if (url) console.log("Open subscription auth URL (auto-debit mandate):", url);',
       '  }',
       '}',
     ],
@@ -163,7 +164,7 @@ const collection = {
     _postman_id: 'lms-api-v2-full',
     name: 'Library Management System API v3',
     description:
-      'Complete LMS API (updated).\n\nSetup:\n1. Import environment (Local or Production)\n2. Auth > Login (saves accessToken)\n3. Library > Get My Library or Create Library (saves libraryId, qrCodeId)\n4. Members / Subscription / other folders\n\nSubscription: open paymentUrl from Create Order in browser.',
+      'Complete LMS API (updated).\n\nSetup:\n1. Import environment (Local or Production)\n2. Auth > Login (saves accessToken)\n3. Library > Get My Library or Create Library (saves libraryId, qrCodeId)\n4. Members / Subscription / other folders\n\nSubscription auto-debit: use subscription_id from Create Order in Razorpay Checkout (NOT order_id / Payment Link).',
     schema: 'https://schema.getpostman.com/json/collection/v2.1.0/collection.json',
   },
   auth: {
@@ -180,7 +181,7 @@ const collection = {
     { key: 'expenseId', value: '' },
     { key: 'planId', value: '' },
     { key: 'resetToken', value: '' },
-    { key: 'razorpayOrderId', value: '' },
+    { key: 'razorpaySubscriptionId', value: '' },
     { key: 'razorpayPaymentId', value: '' },
     { key: 'razorpaySignature', value: '' },
     { key: 'razorpayKey', value: '' },
@@ -492,27 +493,28 @@ const collection = {
           auth: false,
           event: [planIdScript],
         }),
-        req('Create Razorpay Order', 'POST', `${api}/subscription/create-order`, {
+        req('Create Recurring Subscription', 'POST', `${api}/subscription/create-order`, {
           body: { planId: '{{planId}}', confirmReplace: false },
-          desc: 'Returns paymentUrl — open in browser for Razorpay hosted checkout.',
+          desc: 'Creates Razorpay Subscription for auto-debit. Open subscriptionAuthUrl OR Razorpay Checkout with checkout.subscription_id.',
           event: [subscriptionOrderScript],
         }),
-        req('Create Order (Replace Plan)', 'POST', `${api}/subscription/create-order`, {
+        req('Create Subscription (Replace Plan)', 'POST', `${api}/subscription/create-order`, {
           body: { planId: '{{planId}}', confirmReplace: true },
           event: [subscriptionOrderScript],
         }),
         req('Verify Payment', 'POST', `${api}/subscription/verify-payment`, {
           body: {
-            razorpay_order_id: '{{razorpayOrderId}}',
+            razorpay_subscription_id: '{{razorpaySubscriptionId}}',
             razorpay_payment_id: '{{razorpayPaymentId}}',
             razorpay_signature: '{{razorpaySignature}}',
           },
         }),
         req('Get Current Subscription', 'GET', `${api}/subscription/current`, {}),
+        req('Get Recurring / Auto-debit Status', 'GET', `${api}/subscription/recurring-status`, {}),
         req('Get Subscription History', 'GET', `${api}/subscription/history`, {}),
         req('Payment Callback (Browser)', 'GET', `${api}/subscription/payment-callback`, {
           auth: false,
-          desc: 'Razorpay redirects here after Payment Link success (query params auto).',
+          desc: 'Razorpay redirects here after subscription checkout (query params with subscription_id).',
         }),
       ],
     },
