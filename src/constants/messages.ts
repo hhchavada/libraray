@@ -137,6 +137,8 @@ export const MESSAGES = {
   SUBSCRIPTION_ALREADY_RECURRING:
     'You already have an active auto-renewing subscription on this plan. Payment will be deducted automatically.',
   SUBSCRIPTION_PAYMENT_FAILED: 'Subscription payment failed',
+  SUBSCRIPTION_PAYMENT_LINK_UNAVAILABLE:
+    'Payment link is not available. Please create a new subscription order.',
   SUBSCRIPTION_INVALID_SIGNATURE: 'Invalid payment signature',
   SUBSCRIPTION_DUPLICATE_PAYMENT: 'This payment has already been processed',
   SUBSCRIPTION_PLANS_FETCHED: 'Subscription plans fetched successfully',

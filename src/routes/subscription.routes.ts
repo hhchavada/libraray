@@ -8,6 +8,7 @@ const router = Router();
 
 router.get('/plans', subscriptionController.getPlans);
 router.get('/payment-callback', subscriptionController.paymentCallback);
+router.get('/redirect-pay/:razorpaySubscriptionId', subscriptionController.redirectPay);
 router.post('/webhook', subscriptionController.webhook);
 
 router.post(

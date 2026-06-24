@@ -221,6 +221,32 @@ export const razorpayService = {
     return subscription;
   },
 
+  /** Valid Razorpay hosted auth page — always rzp.io, never api.razorpay.com/.../subscriptions/sub_xxx */
+  async resolveSubscriptionAuthUrl(
+    razorpaySubscriptionId: string,
+    shortUrl?: string
+  ): Promise<string> {
+    const isHostedUrl = (url?: string) =>
+      Boolean(url && /^https:\/\/rzp\.io\//i.test(url));
+
+    if (isHostedUrl(shortUrl)) {
+      return shortUrl!;
+    }
+
+    const sub = await this.fetchSubscription(razorpaySubscriptionId);
+    if (isHostedUrl(sub.short_url)) {
+      return sub.short_url!;
+    }
+
+    logger.error(LOG_TAG, 'No valid Razorpay hosted URL for subscription', {
+      razorpaySubscriptionId,
+      shortUrl,
+      fetchedShortUrl: sub.short_url,
+      status: sub.status,
+    });
+    throw new ApiError(400, MESSAGES.SUBSCRIPTION_PAYMENT_LINK_UNAVAILABLE);
+  },
+
   async cancelSubscription(razorpaySubscriptionId: string, cancelAtCycleEnd = false) {
     logger.info(LOG_TAG, 'Cancelling Razorpay subscription', {
       subscriptionId: razorpaySubscriptionId,

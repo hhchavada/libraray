@@ -59,6 +59,12 @@ export const subscriptionController = {
     res.status(200).json(new ApiResponse(200, MESSAGES.SUBSCRIPTION_FETCHED, status));
   }),
 
+  /** Open Razorpay hosted pay page — redirects to https://rzp.io/... */
+  redirectPay: asyncHandler(async (req: Request, res: Response) => {
+    const url = await subscriptionService.getPaymentRedirectUrl(req.params.razorpaySubscriptionId);
+    res.redirect(302, url);
+  }),
+
   /** Razorpay subscription redirect after successful payment — no auth (signature verified). */
   paymentCallback: asyncHandler(async (req: Request, res: Response) => {
     const subscription = await subscriptionService.handleSubscriptionCallback(

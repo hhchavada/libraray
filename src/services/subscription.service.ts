@@ -375,6 +375,7 @@ export const subscriptionService = {
     paymentUrl: string;
     url: string;
     subscriptionAuthUrl: string;
+    redirectPaymentUrl: string;
     razorpaySubscriptionId: string;
     amount: number;
     currency: string;
@@ -498,7 +499,10 @@ export const subscriptionService = {
       throw new ApiError(500, MESSAGES.SUBSCRIPTION_PAYMENT_FAILED);
     }
 
-    const paymentUrl = razorpaySub.short_url;
+    const paymentUrl = await razorpayService.resolveSubscriptionAuthUrl(
+      razorpaySub.id,
+      razorpaySub.short_url
+    );
 
     logger.info(LOG_TAG, 'Pending recurring subscription created', {
       subscriptionId: subscription._id,
@@ -515,9 +519,12 @@ export const subscriptionService = {
     return {
       checkoutMode: 'subscription',
       autoDebit: true,
+      /** Open this in browser — must be https://rzp.io/... (NOT api.razorpay.com/subscriptions/...) */
       paymentUrl,
       url: paymentUrl,
       subscriptionAuthUrl: paymentUrl,
+      /** Same as paymentUrl — use if your app opens a Bridgr URL (redirects to Razorpay). */
+      redirectPaymentUrl: `${ENV.APP_BASE_URL}/api/v1/subscription/redirect-pay/${razorpaySub.id}`,
       razorpaySubscriptionId: razorpaySub.id,
       amount: toRupeesPaise(plan.amount),
       currency: plan.currency ?? 'INR',
@@ -622,6 +629,20 @@ export const subscriptionService = {
     }
 
     return this.activateSubscription(subscription, razorpayPaymentId, razorpaySignature);
+  },
+
+  /** Resolve Razorpay rzp.io hosted auth URL for redirect (never api.razorpay.com/.../subscriptions/...). */
+  async getPaymentRedirectUrl(razorpaySubscriptionId: string): Promise<string> {
+    if (!razorpaySubscriptionId.startsWith('sub_')) {
+      throw new ApiError(400, MESSAGES.VALIDATION_ERROR);
+    }
+
+    const local = await Subscription.findOne({ razorpaySubscriptionId });
+    if (!local) {
+      throw new ApiError(404, MESSAGES.SUBSCRIPTION_ORDER_NOT_FOUND);
+    }
+
+    return razorpayService.resolveSubscriptionAuthUrl(razorpaySubscriptionId);
   },
 
   /**
