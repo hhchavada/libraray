@@ -58,13 +58,45 @@ export interface RazorpaySubscriptionDetails {
   short_url?: string;
 }
 
-/** Format Indian mobile for Razorpay (e.g. +919876543210). */
+/** 10-digit Indian mobile for Razorpay Customer API (no +91 prefix). */
+export const toRazorpayCustomerContact = (mobile: string): string => {
+  const digits = mobile.replace(/\D/g, '');
+  if (digits.length === 12 && digits.startsWith('91')) return digits.slice(2);
+  if (digits.length === 10) return digits;
+  return digits;
+};
+
+/** Format Indian mobile for Razorpay Checkout prefill (e.g. +919876543210). */
 export const formatRazorpayContact = (mobile: string): string => {
   const digits = mobile.replace(/\D/g, '');
   if (digits.length === 10) return `+91${digits}`;
   if (digits.length === 12 && digits.startsWith('91')) return `+${digits}`;
   if (mobile.trim().startsWith('+')) return mobile.trim();
   return `+${digits}`;
+};
+
+const isRazorpayCustomerExistsError = (err: unknown): boolean => {
+  const e = err as { error?: { description?: string } };
+  return (e.error?.description ?? '').toLowerCase().includes('customer already exists');
+};
+
+const findCustomerByEmail = async (email: string): Promise<{ id: string } | null> => {
+  const client = getRazorpayClient();
+  let skip = 0;
+
+  for (let page = 0; page < 20; page += 1) {
+    const result = (await client.customers.all({ count: 100, skip })) as {
+      items?: Array<{ id: string; email?: string }>;
+    };
+    const match = result.items?.find(
+      (c) => c.email?.toLowerCase() === email.toLowerCase()
+    );
+    if (match) return match;
+    if (!result.items?.length || result.items.length < 100) break;
+    skip += 100;
+  }
+
+  return null;
 };
 
 export const razorpayService = {
@@ -106,15 +138,33 @@ export const razorpayService = {
   },
 
   async findOrCreateCustomer(input: CreateRazorpayCustomerInput) {
+    const contact = toRazorpayCustomerContact(input.contact);
     logger.info(LOG_TAG, 'Finding or creating Razorpay customer', { email: input.email });
 
-    // fail_existing: 0 returns the existing customer when email/contact already exists.
-    return getRazorpayClient().customers.create({
-      name: input.name,
-      email: input.email,
-      contact: input.contact,
-      fail_existing: 0,
-    }) as Promise<{ id: string }>;
+    try {
+      return (await getRazorpayClient().customers.create({
+        name: input.name,
+        email: input.email,
+        contact,
+        // Must be string "0" — number 0 is ignored by razorpay-node SDK.
+        fail_existing: '0' as never,
+      })) as { id: string };
+    } catch (err) {
+      if (!isRazorpayCustomerExistsError(err)) {
+        throw err;
+      }
+
+      const existing = await findCustomerByEmail(input.email);
+      if (existing) {
+        logger.info(LOG_TAG, 'Reusing existing Razorpay customer', {
+          email: input.email,
+          customerId: existing.id,
+        });
+        return existing;
+      }
+
+      throw err;
+    }
   },
 
   async createSubscription(input: CreateRazorpaySubscriptionInput) {
@@ -148,7 +198,9 @@ export const razorpayService = {
     if (input.notifyEmail || input.notifyPhone) {
       payload.notify_info = {
         notify_email: input.notifyEmail,
-        notify_phone: input.notifyPhone,
+        notify_phone: input.notifyPhone
+          ? toRazorpayCustomerContact(input.notifyPhone)
+          : undefined,
       };
     }
 

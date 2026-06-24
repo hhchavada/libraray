@@ -52,7 +52,6 @@ const subscriptionSchema = new Schema<ISubscriptionDocument>(
     razorpaySubscriptionId: {
       type: String,
       trim: true,
-      index: true,
     },
     razorpayCustomerId: {
       type: String,
@@ -61,7 +60,6 @@ const subscriptionSchema = new Schema<ISubscriptionDocument>(
     razorpayPaymentLinkId: {
       type: String,
       trim: true,
-      index: true,
     },
     razorpayPaymentId: {
       type: String,

@@ -4,7 +4,6 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Bridgr — Subscription Checkout</title>
-  <script src="https://checkout.razorpay.com/v1/checkout.js"></script>
   <style>
     body { font-family: system-ui, sans-serif; max-width: 520px; margin: 40px auto; padding: 0 16px; color: #0f172a; }
     .card { border: 1px solid #e2e8f0; border-radius: 12px; padding: 24px; margin-bottom: 16px; }
@@ -105,36 +104,10 @@
           body: JSON.stringify({ planId, confirmReplace: true }),
         });
         const d = order.data;
-        const checkout = d.checkout || {};
+        const paymentUrl = d.paymentUrl || d.url;
+        if (!paymentUrl) throw new Error('No payment URL returned');
 
-        const options = {
-          key: checkout.key || d.key,
-          subscription_id: checkout.subscription_id || d.razorpaySubscriptionId,
-          name: checkout.name || 'Bridgr',
-          description: checkout.description || 'Monthly auto-debit subscription',
-          callback_url: checkout.callback_url,
-          prefill: checkout.prefill || {},
-          theme: { color: '#6366f1' },
-          handler: async function (response) {
-            try {
-              await api('/subscription/verify-payment', {
-                method: 'POST',
-                body: JSON.stringify({
-                  razorpay_subscription_id: response.razorpay_subscription_id,
-                  razorpay_payment_id: response.razorpay_payment_id,
-                  razorpay_signature: response.razorpay_signature,
-                }),
-              });
-              show('Payment verified. Auto-debit mandate should be active — check recurring status.', 'success');
-            } catch (e) {
-              show('Payment done but verify failed: ' + e.message, 'error');
-            }
-          },
-        };
-
-        const rzp = new Razorpay(options);
-        rzp.on('payment.failed', (r) => show(r.error.description || 'Payment failed', 'error'));
-        rzp.open();
+        window.location.href = paymentUrl;
       } catch (e) {
         show(e.message, 'error');
       } finally {

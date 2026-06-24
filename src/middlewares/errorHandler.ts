@@ -12,6 +12,12 @@ export const errorHandler = (
 ): void => {
   let error: Error | ApiError = err;
 
+  // Razorpay SDK errors: { statusCode, error: { description } }
+  const rzErr = err as { statusCode?: number; error?: { description?: string } };
+  if (rzErr.error?.description) {
+    error = new ApiError(rzErr.statusCode ?? 400, rzErr.error.description);
+  }
+
   // Mongoose validation error
   if (err instanceof mongoose.Error.ValidationError) {
     const message = Object.values(err.errors).map((val) => val.message).join(', ');
@@ -41,6 +47,8 @@ export const errorHandler = (
       message = MESSAGES.DUPLICATE_MOBILE;
     } else if (fields.includes('memberId')) {
       message = 'Member ID conflict, please retry.';
+    } else if (fields.includes('razorpayOrderId') || fields.includes('razorpaySubscriptionId')) {
+      message = 'Subscription record conflict. Please retry or contact support.';
     }
     error = new ApiError(409, message);
   }

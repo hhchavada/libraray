@@ -16,8 +16,7 @@ import {
   PLAN_CATEGORY_LABELS,
   SUBSCRIPTION_PLANS_SEED,
 } from '../constants/subscriptionPlans.data';
-import { formatRazorpayContact, razorpayService } from './razorpay.service';
-import { ENV } from '../config/env';
+import { formatRazorpayContact, razorpayService, toRazorpayCustomerContact } from './razorpay.service';
 import { addMonths, toRupeesPaise } from '../utils/subscription.util';
 import { calculateGstBreakdown } from '../utils/gst.util';
 import { endFreeTrialForUser } from '../utils/freeTrial.util';
@@ -348,21 +347,14 @@ export const subscriptionService = {
     planId: string,
     confirmReplace = false
   ): Promise<{
+    paymentUrl: string;
+    url: string;
     razorpaySubscriptionId: string;
     amount: number;
     currency: string;
     key: string;
     subscriptionId: string;
-    paymentUrl: string;
     isRecurring: true;
-    checkout: {
-      key: string;
-      subscription_id: string;
-      name: string;
-      description: string;
-      callback_url: string;
-      prefill: { name: string; email: string; contact: string };
-    };
   }> {
     if (!mongoose.Types.ObjectId.isValid(planId)) {
       throw new ApiError(400, MESSAGES.VALIDATION_ERROR);
@@ -416,7 +408,7 @@ export const subscriptionService = {
     const customer = await razorpayService.findOrCreateCustomer({
       name: user.fullName,
       email: user.email,
-      contact: formatRazorpayContact(user.mobileNumber),
+      contact: toRazorpayCustomerContact(user.mobileNumber),
     });
 
     const subscription = await Subscription.create({
@@ -464,33 +456,32 @@ export const subscriptionService = {
       );
     }
 
+    if (!razorpaySub.short_url) {
+      subscription.status = LibrarySubscriptionStatus.CANCELLED;
+      await subscription.save();
+      throw new ApiError(500, MESSAGES.SUBSCRIPTION_PAYMENT_FAILED);
+    }
+
+    const paymentUrl = razorpaySub.short_url;
+
     logger.info(LOG_TAG, 'Pending recurring subscription created', {
       subscriptionId: subscription._id,
       razorpaySubscriptionId: razorpaySub.id,
       userId,
+      paymentUrl,
     });
 
     return {
+      /** Open in browser / WebView — Razorpay hosted subscription checkout (auto-debit). */
+      paymentUrl,
+      /** Alias for paymentUrl — same link, for FE backward compatibility. */
+      url: paymentUrl,
       razorpaySubscriptionId: razorpaySub.id,
       amount: toRupeesPaise(plan.amount),
       currency: plan.currency ?? 'INR',
       key: razorpayService.getPublicKey(),
       subscriptionId: subscription._id.toString(),
-      paymentUrl: razorpaySub.short_url ?? '',
       isRecurring: true,
-      /** Use Razorpay Checkout with subscription_id — NOT order_id — for auto-debit mandate. */
-      checkout: {
-        key: razorpayService.getPublicKey(),
-        subscription_id: razorpaySub.id,
-        name: 'Bridgr Library Subscription',
-        description: plan.name,
-        callback_url: ENV.RAZORPAY_PAYMENT_CALLBACK_URL,
-        prefill: {
-          name: user.fullName,
-          email: user.email,
-          contact: formatRazorpayContact(user.mobileNumber),
-        },
-      },
     };
   },
 
@@ -816,6 +807,8 @@ export const subscriptionService = {
   },
 
   async migrateLegacySubscriptionPlans(): Promise<void> {
+    await this.migrateSubscriptionIndexes();
+
     const collection = SubscriptionPlan.collection;
     const indexes = await collection.indexes();
 
@@ -846,6 +839,54 @@ export const subscriptionService = {
     }
 
     await SubscriptionPlan.syncIndexes();
+  },
+
+  /** Drop legacy unique indexes that block multiple recurring subscriptions (null order ids). */
+  async migrateSubscriptionIndexes(): Promise<void> {
+    const collection = Subscription.collection;
+    const indexes = await collection.indexes();
+
+    for (const index of indexes) {
+      const name = index.name;
+      if (!name || name === '_id_') continue;
+
+      const keys = index.key as Record<string, number>;
+      const hasPartialFilter = Boolean(index.partialFilterExpression);
+
+      if ('razorpayOrderId' in keys && !hasPartialFilter) {
+        try {
+          await collection.dropIndex(name);
+          logger.info(LOG_TAG, 'Dropped legacy razorpayOrderId index', { name });
+        } catch (err) {
+          logger.warn(LOG_TAG, 'Could not drop razorpayOrderId index', { name, err });
+        }
+      }
+
+      if ('razorpayPaymentLinkId' in keys) {
+        try {
+          await collection.dropIndex(name);
+          logger.info(LOG_TAG, 'Dropped legacy razorpayPaymentLinkId index', { name });
+        } catch (err) {
+          logger.warn(LOG_TAG, 'Could not drop razorpayPaymentLinkId index', { name, err });
+        }
+      }
+
+      // Non-unique auto index from old `index: true` on razorpaySubscriptionId field.
+      if (
+        'razorpaySubscriptionId' in keys &&
+        !index.unique &&
+        name === 'razorpaySubscriptionId_1'
+      ) {
+        try {
+          await collection.dropIndex(name);
+          logger.info(LOG_TAG, 'Dropped duplicate razorpaySubscriptionId index', { name });
+        } catch (err) {
+          logger.warn(LOG_TAG, 'Could not drop razorpaySubscriptionId index', { name, err });
+        }
+      }
+    }
+
+    await Subscription.syncIndexes();
   },
 
   async seedPlans(): Promise<{ created: number; updated: number }> {
