@@ -2,19 +2,29 @@ import mongoose from 'mongoose';
 import { Library } from '../models/library.model';
 import { Member } from '../models/member.model';
 import { Seat } from '../models/seat.model';
+import { Subscription } from '../models/subscription.model';
 import { ApiError } from '../utils/ApiError';
 import { MESSAGES } from '../constants/messages';
-import { MemberStatus, MemberType, SeatStatus } from '../constants/enums';
+import { MemberStatus, MemberType, PlanCategory, SeatStatus, SubscriptionPaymentStatus, LibrarySubscriptionStatus } from '../constants/enums';
 import { seatService } from './seat.service';
 import { formatMemberLabels, formatSeatLabels } from '../utils/formatLabel.util';
+import { AdminFilters, planCategoryFromSeats } from '../utils/adminFilter.util';
+import { buildLibraryQuery } from './adminAnalytics.service';
+import { PLAN_CATEGORY_LABELS } from '../constants/subscriptionPlans.data';
 
 export interface AdminLibraryRow {
   libraryId: string;
+  libraryCode: string;
   libraryName: string;
   address: string;
   isActive: boolean;
   totalSeats: number;
   createdAt: Date;
+  subscriptionPlan: {
+    name: string | null;
+    category: string;
+    endDate: Date | null;
+  };
   owner: {
     id: string;
     fullName: string;
@@ -94,13 +104,15 @@ export interface AdminDashboardData {
 const buildLibraryStats = async (
   library: {
     _id: mongoose.Types.ObjectId;
+    libraryCode?: string;
     libraryName: string;
     address: string;
     isActive: boolean;
     totalSeats: number;
     createdAt: Date;
     owner: unknown;
-  }
+  },
+  subscriptionPlan?: AdminLibraryRow['subscriptionPlan']
 ): Promise<AdminLibraryRow> => {
   const libraryId = library._id.toString();
   const libraryObjectId = library._id;
@@ -155,11 +167,17 @@ const buildLibraryStats = async (
 
   return {
     libraryId,
+    libraryCode: library.libraryCode ?? '—',
     libraryName: library.libraryName,
     address: library.address,
     isActive: library.isActive,
     totalSeats: library.totalSeats,
     createdAt: library.createdAt,
+    subscriptionPlan: subscriptionPlan ?? {
+      name: null,
+      category: PLAN_CATEGORY_LABELS[planCategoryFromSeats(library.totalSeats)],
+      endDate: null,
+    },
     owner: owner
       ? {
           id: owner._id.toString(),
@@ -192,14 +210,76 @@ const buildLibraryStats = async (
   };
 };
 
+const getOwnerId = (owner: unknown): string => {
+  const ownerDoc = owner as { _id?: mongoose.Types.ObjectId } | mongoose.Types.ObjectId | null;
+  if (ownerDoc && typeof ownerDoc === 'object' && '_id' in ownerDoc && ownerDoc._id) {
+    return ownerDoc._id.toString();
+  }
+  return String(ownerDoc);
+};
+
+const getSubscriptionPlansByOwnerIds = async (
+  ownerIds: string[]
+): Promise<Map<string, AdminLibraryRow['subscriptionPlan']>> => {
+  if (ownerIds.length === 0) return new Map();
+
+  const subscriptions = await Subscription.find({
+    userId: { $in: ownerIds },
+    paymentStatus: SubscriptionPaymentStatus.PAID,
+  })
+    .sort({ createdAt: -1 })
+    .populate('planId')
+    .lean();
+
+  const subsByOwner = new Map<string, typeof subscriptions>();
+  for (const sub of subscriptions) {
+    const key = sub.userId.toString();
+    if (!subsByOwner.has(key)) subsByOwner.set(key, []);
+    subsByOwner.get(key)!.push(sub);
+  }
+
+  const planMap = new Map<string, AdminLibraryRow['subscriptionPlan']>();
+  for (const ownerId of ownerIds) {
+    const ownerSubs = subsByOwner.get(ownerId) ?? [];
+    const latestPaid = ownerSubs[0];
+    const activePaid = ownerSubs.find(
+      (s) =>
+        s.status === LibrarySubscriptionStatus.ACTIVE &&
+        s.endDate &&
+        new Date(s.endDate) >= new Date()
+    );
+    const sub = activePaid ?? latestPaid;
+    const plan = sub?.planId as { name?: string; category?: PlanCategory } | null;
+
+    planMap.set(ownerId, {
+      name: plan?.name ?? null,
+      category: plan?.category ? PLAN_CATEGORY_LABELS[plan.category] : '—',
+      endDate: sub?.endDate ?? null,
+    });
+  }
+
+  return planMap;
+};
+
 export const adminService = {
-  async getDashboard(): Promise<AdminDashboardData> {
-    const libraries = await Library.find()
+  async getDashboard(filters?: AdminFilters): Promise<AdminDashboardData> {
+    const libraryFilter: Record<string, unknown> = {};
+    if (filters) {
+      const ids = await buildLibraryQuery(filters);
+      libraryFilter._id = { $in: ids };
+    }
+
+    const libraries = await Library.find(libraryFilter)
       .populate('owner', 'fullName email mobileNumber')
       .sort({ createdAt: -1 })
       .lean();
 
-    const libraryRows = await Promise.all(libraries.map((lib) => buildLibraryStats(lib)));
+    const ownerIds = libraries.map((lib) => getOwnerId(lib.owner));
+    const planMap = await getSubscriptionPlansByOwnerIds(ownerIds);
+
+    const libraryRows = await Promise.all(
+      libraries.map((lib) => buildLibraryStats(lib, planMap.get(getOwnerId(lib.owner))))
+    );
 
     const summary = libraryRows.reduce(
       (acc, row) => {
@@ -245,7 +325,9 @@ export const adminService = {
       throw new ApiError(404, MESSAGES.LIBRARY_NOT_FOUND);
     }
 
-    const stats = await buildLibraryStats(library);
+    const ownerId = getOwnerId(library.owner);
+    const planMap = await getSubscriptionPlansByOwnerIds([ownerId]);
+    const stats = await buildLibraryStats(library, planMap.get(ownerId));
 
     const [members, seatsRaw] = await Promise.all([
       Member.find({ library: libraryId })

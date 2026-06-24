@@ -17,6 +17,7 @@ import {
   SUBSCRIPTION_PLANS_SEED,
 } from '../constants/subscriptionPlans.data';
 import { formatRazorpayContact, razorpayService, toRazorpayCustomerContact } from './razorpay.service';
+import { ENV } from '../config/env';
 import { addMonths, toRupeesPaise } from '../utils/subscription.util';
 import { calculateGstBreakdown } from '../utils/gst.util';
 import { endFreeTrialForUser } from '../utils/freeTrial.util';
@@ -24,7 +25,26 @@ import { logger } from '../utils/logger';
 
 const LOG_TAG = 'Subscription';
 
-export type GroupedPlans = Record<string, ISubscriptionPlanDocument[]>;
+export type PlanWithAutoDebit = ISubscriptionPlanDocument & PlanClientMeta;
+
+export type GroupedPlans = Record<string, PlanWithAutoDebit[]>;
+
+interface PlanClientMeta {
+  autoDebit: true;
+  /** Months between automatic Razorpay charges (1 = every month). */
+  chargesEveryMonths: number;
+  billingLabel: string;
+}
+
+const enrichPlan = (plan: ISubscriptionPlanDocument): PlanWithAutoDebit =>
+  Object.assign(plan, {
+    autoDebit: true as const,
+    chargesEveryMonths: plan.durationMonths,
+    billingLabel:
+      plan.durationMonths === 1
+        ? 'Billed automatically every month'
+        : `Billed automatically every ${plan.durationMonths} months`,
+  });
 
 interface RazorpayWebhookEntity {
   id: string;
@@ -36,6 +56,7 @@ interface RazorpayWebhookEntity {
 interface RazorpayWebhookPayload {
   subscription?: { entity: RazorpayWebhookEntity };
   payment?: { entity: { id: string; subscription_id?: string } };
+  invoice?: { entity: { subscription_id?: string; payment_id?: string } };
 }
 
 interface RazorpayWebhookEvent {
@@ -85,12 +106,13 @@ const ensureRazorpayPlan = async (
 export const subscriptionService = {
   async getPlansGrouped(): Promise<GroupedPlans> {
     const plans = await SubscriptionPlan.find({ isActive: true })
-      .sort({ seatsMin: 1, durationMonths: 1 })
-      .lean<ISubscriptionPlanDocument[]>();
+      .sort({ seatsMin: 1, durationMonths: 1 });
 
     const grouped: GroupedPlans = {};
     for (const category of Object.values(PlanCategory)) {
-      grouped[PLAN_CATEGORY_LABELS[category]] = plans.filter((p) => p.category === category);
+      grouped[PLAN_CATEGORY_LABELS[category]] = plans
+        .filter((p) => p.category === category)
+        .map((p) => enrichPlan(p));
     }
     return grouped;
   },
@@ -182,6 +204,7 @@ export const subscriptionService = {
 
     subscription.razorpayPaymentId = razorpayPaymentId;
     if (razorpaySignature) subscription.razorpaySignature = razorpaySignature;
+    if (subscription.razorpaySubscriptionId) subscription.isRecurring = true;
     subscription.paymentStatus = SubscriptionPaymentStatus.PAID;
     subscription.status = LibrarySubscriptionStatus.ACTIVE;
     subscription.startDate = startDate;
@@ -347,14 +370,27 @@ export const subscriptionService = {
     planId: string,
     confirmReplace = false
   ): Promise<{
+    checkoutMode: 'subscription';
+    autoDebit: true;
     paymentUrl: string;
     url: string;
+    subscriptionAuthUrl: string;
     razorpaySubscriptionId: string;
     amount: number;
     currency: string;
     key: string;
     subscriptionId: string;
     isRecurring: true;
+    chargesEveryMonths: number;
+    checkout: {
+      key: string;
+      subscription_id: string;
+      name: string;
+      description: string;
+      callback_url: string;
+      prefill: { name: string; email: string; contact: string };
+      notes: string;
+    };
   }> {
     if (!mongoose.Types.ObjectId.isValid(planId)) {
       throw new ApiError(400, MESSAGES.VALIDATION_ERROR);
@@ -389,9 +425,9 @@ export const subscriptionService = {
             err,
           });
         }
-        active.status = LibrarySubscriptionStatus.CANCELLED;
-        await active.save();
       }
+      active.status = LibrarySubscriptionStatus.CANCELLED;
+      await active.save();
     }
 
     await Subscription.updateMany(
@@ -471,17 +507,38 @@ export const subscriptionService = {
       paymentUrl,
     });
 
+    const checkoutDescription =
+      plan.durationMonths === 1
+        ? `${plan.name} — auto-debit every month`
+        : `${plan.name} — auto-debit every ${plan.durationMonths} months`;
+
     return {
-      /** Open in browser / WebView — Razorpay hosted subscription checkout (auto-debit). */
+      checkoutMode: 'subscription',
+      autoDebit: true,
       paymentUrl,
-      /** Alias for paymentUrl — same link, for FE backward compatibility. */
       url: paymentUrl,
+      subscriptionAuthUrl: paymentUrl,
       razorpaySubscriptionId: razorpaySub.id,
       amount: toRupeesPaise(plan.amount),
       currency: plan.currency ?? 'INR',
       key: razorpayService.getPublicKey(),
       subscriptionId: subscription._id.toString(),
       isRecurring: true,
+      chargesEveryMonths: plan.durationMonths,
+      checkout: {
+        key: razorpayService.getPublicKey(),
+        subscription_id: razorpaySub.id,
+        name: 'Bridgr Library Subscription',
+        description: checkoutDescription,
+        callback_url: ENV.RAZORPAY_PAYMENT_CALLBACK_URL,
+        prefill: {
+          name: user.fullName,
+          email: user.email,
+          contact: formatRazorpayContact(user.mobileNumber),
+        },
+        notes:
+          'Open paymentUrl in browser or use subscription_id checkout. order_id does not enable auto-debit.',
+      },
     };
   },
 
@@ -683,6 +740,14 @@ export const subscriptionService = {
         break;
       }
 
+      case 'invoice.paid': {
+        const invoice = event.payload?.invoice?.entity;
+        if (invoice?.subscription_id && invoice.payment_id) {
+          await this.processRecurringCharge(invoice.subscription_id, invoice.payment_id);
+        }
+        break;
+      }
+
       case 'subscription.halted':
       case 'subscription.cancelled':
       case 'subscription.completed':
@@ -727,9 +792,13 @@ export const subscriptionService = {
       .populate('planId');
 
     if (!local?.razorpaySubscriptionId) {
+      const legacyOneTime = Boolean(local?.razorpayPaymentLinkId || local?.razorpayOrderId);
       return {
         hasRecurring: false,
-        message: 'No Razorpay subscription linked. Pay via subscription checkout (subscription_id), not one-time order.',
+        legacyOneTimePayment: legacyOneTime,
+        message: legacyOneTime
+          ? 'Paid via one-time Payment Link — no auto-debit mandate. Create a new order and pay with subscription checkout (subscription_id) to enable monthly auto-cut.'
+          : 'No Razorpay subscription linked. Pay via subscription checkout (subscription_id), not one-time order_id or Payment Link.',
       };
     }
 

@@ -24,6 +24,7 @@ const adminFiltersSchema = {
     .optional()
     .allow('', null)
     .empty(['', null]),
+  libraryCode: Joi.string().trim().uppercase().optional(),
   search: Joi.string().trim().optional(),
   page: Joi.number().integer().min(1).optional().default(1),
   limit: Joi.number().integer().min(1).max(100).optional().default(20),

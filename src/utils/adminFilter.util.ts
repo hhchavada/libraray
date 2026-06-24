@@ -14,6 +14,8 @@ export interface AdminFilters {
   city?: string;
   planCategory?: PlanCategory;
   executiveId?: string;
+  /** Human-readable library code, e.g. BRD-0001 */
+  libraryCode?: string;
   search?: string;
   page: number;
   limit: number;
@@ -91,6 +93,7 @@ export const parseAdminFilters = (query: Record<string, unknown>): AdminFilters 
       const raw = query.executiveId ? String(query.executiveId).trim() : '';
       return raw && mongoose.Types.ObjectId.isValid(raw) ? raw : undefined;
     })(),
+    libraryCode: query.libraryCode ? String(query.libraryCode).trim().toUpperCase() : undefined,
     search: query.search ? String(query.search).trim() : undefined,
     page: Math.max(1, Number(query.page) || 1),
     limit: Math.min(100, Math.max(1, Number(query.limit) || 20)),

@@ -1,6 +1,8 @@
 import mongoose, { Document, Schema, Types } from 'mongoose';
 
 export interface ILibrary {
+  /** Human-readable platform ID, e.g. BRD-0001 (not MongoDB _id). */
+  libraryCode?: string;
   libraryName: string;
   address: string;
   state?: string;
@@ -24,6 +26,13 @@ export interface ILibraryDocument extends ILibrary, Document {}
 
 const librarySchema = new Schema<ILibraryDocument>(
   {
+    libraryCode: {
+      type: String,
+      unique: true,
+      sparse: true,
+      trim: true,
+      uppercase: true,
+    },
     libraryName: {
       type: String,
       required: true,
@@ -89,5 +98,6 @@ const librarySchema = new Schema<ILibraryDocument>(
 );
 
 librarySchema.index({ qrCodeId: 1 }, { unique: true, sparse: true });
+librarySchema.index({ libraryCode: 1 }, { unique: true, sparse: true });
 
 export const Library = mongoose.model<ILibraryDocument>('Library', librarySchema);

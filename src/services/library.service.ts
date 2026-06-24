@@ -20,6 +20,7 @@ import {
   SeatGridPlacement,
 } from '../utils/seatGrid.util';
 import { getFreeTrialForUserId } from '../utils/freeTrial.util';
+import { generateLibraryCode, ensureLibraryCode } from '../utils/libraryCode.util';
 
 const DEFAULT_SEAT_MAP_COLUMNS = 12;
 
@@ -129,7 +130,10 @@ export const libraryService = {
       seatMapRows = computeSeatMapRows(totalSeats, seatMapColumns);
     }
 
+    const libraryCode = await generateLibraryCode();
+
     const library = await Library.create({
+      libraryCode,
       libraryName: data.libraryName,
       address: data.address,
       ...(data.state?.trim() ? { state: data.state.trim() } : {}),
@@ -188,6 +192,7 @@ export const libraryService = {
 
     return {
       libraryId: library._id,
+      libraryCode: library.libraryCode ?? (await ensureLibraryCode(library)),
       libraryName: library.libraryName,
       qrCodeId: library.qrCodeId,
       qrCodePayload: library.qrCodePayload,
@@ -208,13 +213,14 @@ export const libraryService = {
   },
 
   /**
-   * Returns library data with short, app-friendly `libraryId` and `ownerId`
-   * at the top level for easy consumption by the mobile/web app.
+   * Returns library data with `libraryId` (MongoDB _id for API routes) and
+   * `libraryCode` (human-readable BRD-0001 id) at the top level.
    */
   async getLibraryForApp(ownerId: string) {
     const library = await this.getLibraryByOwner(ownerId);
     await syncLibraryQrCodeIfNeeded(library);
 
+    const libraryCode = await ensureLibraryCode(library);
     const libraryObj = library.toJSON();
     const freeTrial = await getFreeTrialForUserId(ownerId);
 
@@ -224,6 +230,7 @@ export const libraryService = {
 
     return {
       _id: library._id.toString(),
+      libraryCode,
       libraryId: library._id.toString(),
       ownerId: library.owner.toString(),
       libraryName: libraryObj.libraryName,

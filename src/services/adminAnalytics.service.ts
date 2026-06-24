@@ -25,6 +25,7 @@ import { PLAN_CATEGORY_LABELS } from '../constants/subscriptionPlans.data';
 
 type LibraryLean = {
   _id: mongoose.Types.ObjectId;
+  libraryCode?: string;
   libraryName: string;
   address: string;
   state?: string;
@@ -37,11 +38,14 @@ type LibraryLean = {
 
 interface LibraryContext {
   libraryId: string;
+  libraryCode: string;
   libraryName: string;
   state: string;
   city: string;
   totalSeats: number;
   planCategory: PlanCategory;
+  activePlanName: string | null;
+  planEndDate: Date | null;
   lifecycleStatus: LibraryLifecycleStatus;
   owner: { id: string; fullName: string; email: string; mobileNumber: string; registeredAt?: Date };
 }
@@ -53,7 +57,7 @@ const durationLabel: Record<string, string> = {
   [PlanDurationType.YEARLY]: 'Annual',
 };
 
-const buildLibraryQuery = async (filters: AdminFilters): Promise<mongoose.Types.ObjectId[]> => {
+export const buildLibraryQuery = async (filters: AdminFilters): Promise<mongoose.Types.ObjectId[]> => {
   const query: Record<string, unknown> = {};
 
   if (filters.state) query.state = filters.state;
@@ -78,11 +82,16 @@ const buildLibraryQuery = async (filters: AdminFilters): Promise<mongoose.Types.
     query.totalSeats = { $gte: r.min, $lte: r.max };
   }
 
+  if (filters.libraryCode) {
+    query.libraryCode = { $regex: filters.libraryCode, $options: 'i' };
+  }
+
   if (filters.search) {
     query.$or = [
       { libraryName: { $regex: filters.search, $options: 'i' } },
       { city: { $regex: filters.search, $options: 'i' } },
       { state: { $regex: filters.search, $options: 'i' } },
+      { libraryCode: { $regex: filters.search, $options: 'i' } },
     ];
   }
 
@@ -130,7 +139,7 @@ const buildLibraryContexts = async (libraryIds: mongoose.Types.ObjectId[]): Prom
         new Date(s.endDate) >= new Date()
     );
 
-    const planDoc = latestPaid?.planId as { category?: PlanCategory } | null;
+    const planDoc = latestPaid?.planId as { category?: PlanCategory; name?: string } | null;
     const planCategory =
       planDoc?.category ?? planCategoryFromSeats(lib.totalSeats);
 
@@ -142,11 +151,16 @@ const buildLibraryContexts = async (libraryIds: mongoose.Types.ObjectId[]): Prom
 
     return {
       libraryId: lib._id.toString(),
+      libraryCode: lib.libraryCode ?? '—',
       libraryName: lib.libraryName,
       state: lib.state ?? 'Unknown',
       city: lib.city ?? 'Unknown',
       totalSeats: lib.totalSeats,
       planCategory,
+      activePlanName: activePaid?.planId
+        ? ((activePaid.planId as { name?: string }).name ?? planDoc?.name ?? null)
+        : (planDoc?.name ?? null),
+      planEndDate: activePaid?.endDate ?? latestPaid?.endDate ?? null,
       lifecycleStatus,
       owner: ownerDoc
         ? {
@@ -203,6 +217,16 @@ export const adminAnalyticsService = {
       dateFilters: ['today', 'this_week', 'this_month', 'this_year', 'custom_range'],
       states: states.filter(Boolean).sort(),
       cities: cities.filter(Boolean).sort(),
+      libraries: (
+        await Library.find({ libraryCode: { $exists: true, $ne: '' } })
+          .select('libraryCode libraryName')
+          .sort({ libraryCode: 1 })
+          .lean()
+      ).map((l) => ({
+        id: l._id.toString(),
+        libraryCode: l.libraryCode ?? '',
+        libraryName: l.libraryName,
+      })),
       planCategories: Object.values(PlanCategory).map((c) => ({
         value: c,
         label: PLAN_CATEGORY_LABELS[c],
@@ -532,6 +556,7 @@ export const adminAnalyticsService = {
 
       return {
         transactionId: sub.razorpayPaymentId ?? sub.razorpayOrderId,
+        libraryCode: ctx?.libraryCode ?? '—',
         libraryName: ctx?.libraryName ?? '—',
         ownerName: (sub.userId as { fullName?: string })?.fullName ?? '—',
         paymentDate: sub.createdAt,
@@ -568,8 +593,9 @@ export const adminAnalyticsService = {
     const rows = contexts.map((ctx) => {
       const usage = usageMap.get(ctx.libraryId);
       return {
+        libraryCode: ctx.libraryCode,
         libraryName: ctx.libraryName,
-        planType: PLAN_CATEGORY_LABELS[ctx.planCategory],
+        planType: ctx.activePlanName ?? PLAN_CATEGORY_LABELS[ctx.planCategory],
         studentsCount: memberMap.get(ctx.libraryId) ?? 0,
         seatsCount: ctx.totalSeats,
         smsSent: usage?.smsTotal ?? 0,
@@ -668,6 +694,7 @@ export const adminAnalyticsService = {
       const daysRemaining = Math.ceil((endDate.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
 
       return {
+        libraryCode: ctx?.libraryCode ?? '—',
         libraryName: ctx?.libraryName ?? '—',
         ownerName: (sub.userId as { fullName?: string })?.fullName ?? '—',
         planType: plan?.name ?? '—',

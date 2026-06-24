@@ -14,8 +14,9 @@ export const adminController = {
     res.sendFile(path.join(__dirname, '../../public/admin.html'));
   },
 
-  getDashboard: asyncHandler(async (_req: Request, res: Response) => {
-    const data = await adminService.getDashboard();
+  getDashboard: asyncHandler(async (req: Request, res: Response) => {
+    const filters = parseAdminFilters(req.query as Record<string, unknown>);
+    const data = await adminService.getDashboard(filters);
     res.status(200).json(new ApiResponse(200, MESSAGES.ADMIN_DASHBOARD_FETCHED, data));
   }),
 
