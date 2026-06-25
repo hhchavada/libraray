@@ -4,6 +4,7 @@ import { adminService } from '../services/admin.service';
 import { adminAnalyticsService } from '../services/adminAnalytics.service';
 import { adminImportService } from '../services/adminImport.service';
 import { subscriptionService } from '../services/subscription.service';
+import { promoService } from '../services/promo.service';
 import { ApiResponse } from '../utils/ApiResponse';
 import { asyncHandler } from '../utils/asyncHandler';
 import { MESSAGES } from '../constants/messages';
@@ -156,5 +157,25 @@ export const adminController = {
       paymentStatus: req.query.paymentStatus as never,
     });
     res.status(200).json(new ApiResponse(200, MESSAGES.SUBSCRIPTION_ADMIN_LIST_FETCHED, list));
+  }),
+
+  createPromoCode: asyncHandler(async (req: Request, res: Response) => {
+    const promo = await promoService.adminCreatePromo(req.body);
+    res.status(201).json(new ApiResponse(201, MESSAGES.PROMO_CREATED, promo));
+  }),
+
+  updatePromoCode: asyncHandler(async (req: Request, res: Response) => {
+    const promo = await promoService.adminUpdatePromo(req.params.promoId, req.body);
+    res.status(200).json(new ApiResponse(200, MESSAGES.PROMO_UPDATED, promo));
+  }),
+
+  disablePromoCode: asyncHandler(async (req: Request, res: Response) => {
+    const promo = await promoService.adminDisablePromo(req.params.promoId);
+    res.status(200).json(new ApiResponse(200, MESSAGES.PROMO_DISABLED, promo));
+  }),
+
+  listPromoCodes: asyncHandler(async (_req: Request, res: Response) => {
+    const promos = await promoService.adminListPromos();
+    res.status(200).json(new ApiResponse(200, MESSAGES.PROMO_LIST_FETCHED, promos));
   }),
 };

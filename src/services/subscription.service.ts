@@ -4,6 +4,7 @@ import {
   ISubscriptionPlanDocument,
 } from '../models/subscriptionPlan.model';
 import { Subscription, ISubscriptionDocument } from '../models/subscription.model';
+import { IPromoCodeDocument } from '../models/promoCode.model';
 import { User } from '../models/user.model';
 import { ApiError } from '../utils/ApiError';
 import { MESSAGES } from '../constants/messages';
@@ -17,7 +18,7 @@ import {
   SUBSCRIPTION_PLANS_SEED,
 } from '../constants/subscriptionPlans.data';
 import { formatRazorpayContact, razorpayService, toRazorpayCustomerContact } from './razorpay.service';
-import { ENV } from '../config/env';
+import { promoService, PromoPricingPreview } from './promo.service';
 import { addMonths, toRupeesPaise } from '../utils/subscription.util';
 import { calculateGstBreakdown } from '../utils/gst.util';
 import { endFreeTrialForUser } from '../utils/freeTrial.util';
@@ -101,6 +102,63 @@ const ensureRazorpayPlan = async (
   await plan.save();
 
   return razorpayPlan.id;
+};
+
+/** Razorpay plan at a promo/discounted amount — managed entirely by backend (no Razorpay offers). */
+const ensureRazorpayPlanAtAmount = async (
+  plan: ISubscriptionPlanDocument,
+  amountInRupees: number,
+  promoCode?: string
+): Promise<string> => {
+  if (amountInRupees === plan.amount) {
+    return ensureRazorpayPlan(plan);
+  }
+
+  const razorpayPlan = await razorpayService.createPlan({
+    name: promoCode ? `${plan.name} (${promoCode})` : `${plan.name} (Promo)`,
+    amountInRupees,
+    currency: plan.currency,
+    intervalMonths: plan.durationMonths,
+    notes: {
+      mongoPlanId: String(plan._id),
+      category: plan.category,
+      durationType: plan.durationType,
+      promoCode: promoCode ?? '',
+      promoAmount: String(amountInRupees),
+    },
+  });
+
+  return razorpayPlan.id;
+};
+
+const schedulePromoRevertToFullPrice = async (
+  subscription: ISubscriptionDocument,
+  plan: ISubscriptionPlanDocument
+): Promise<void> => {
+  if (!subscription.razorpaySubscriptionId || subscription.promoBillingCycles !== 1) {
+    return;
+  }
+
+  const fullPlanId = await ensureRazorpayPlan(plan);
+  try {
+    await razorpayService.updateSubscriptionPlan(
+      subscription.razorpaySubscriptionId,
+      fullPlanId,
+      'cycle_end'
+    );
+    logger.info(LOG_TAG, 'Scheduled Razorpay subscription revert to full plan price', {
+      subscriptionId: subscription._id,
+      razorpaySubscriptionId: subscription.razorpaySubscriptionId,
+      promoBillingCycles: subscription.promoBillingCycles,
+      fullPlanId,
+    });
+  } catch (err) {
+    logger.warn(LOG_TAG, 'Could not schedule promo revert to full plan price', {
+      subscriptionId: subscription._id,
+      razorpaySubscriptionId: subscription.razorpaySubscriptionId,
+      err,
+    });
+  }
 };
 
 export const subscriptionService = {
@@ -200,7 +258,9 @@ export const subscriptionService = {
       );
     }
 
-    const gst = calculateGstBreakdown(subscription.amount);
+    const gst = calculateGstBreakdown(
+      subscription.promoDiscountedAmount ?? subscription.amount
+    );
 
     subscription.razorpayPaymentId = razorpayPaymentId;
     if (razorpaySignature) subscription.razorpaySignature = razorpaySignature;
@@ -215,6 +275,14 @@ export const subscriptionService = {
     subscription.razorpayGst = gst.razorpayGst;
     subscription.netSettlementAmount = gst.netSettlementAmount;
     await subscription.save();
+
+    if (subscription.promoCodeId) {
+      await promoService.recordUsage(subscription.promoCodeId);
+    }
+
+    if (subscription.promoBillingCycles === 1 && plan) {
+      await schedulePromoRevertToFullPrice(subscription, plan);
+    }
 
     await endFreeTrialForUser(userId);
 
@@ -365,33 +433,34 @@ export const subscriptionService = {
     return renewal.populate('planId');
   },
 
+  async validatePromo(planId: string, promoCode: string): Promise<PromoPricingPreview> {
+    if (!mongoose.Types.ObjectId.isValid(planId)) {
+      throw new ApiError(400, MESSAGES.VALIDATION_ERROR);
+    }
+
+    const plan = await SubscriptionPlan.findById(planId);
+    if (!plan || !plan.isActive) {
+      throw new ApiError(404, MESSAGES.SUBSCRIPTION_PLAN_NOT_FOUND);
+    }
+
+    const promo = await promoService.findValidPromoForPlan(promoCode, plan);
+    return promoService.buildPricingPreview(promo, plan);
+  },
+
   async createOrder(
     userId: string,
     planId: string,
-    confirmReplace = false
+    confirmReplace = false,
+    promoCode?: string
   ): Promise<{
-    checkoutMode: 'subscription';
-    autoDebit: true;
-    paymentUrl: string;
-    url: string;
-    subscriptionAuthUrl: string;
-    redirectPaymentUrl: string;
     razorpaySubscriptionId: string;
     amount: number;
+    discountedAmount?: number;
     currency: string;
     key: string;
     subscriptionId: string;
     isRecurring: true;
-    chargesEveryMonths: number;
-    checkout: {
-      key: string;
-      subscription_id: string;
-      name: string;
-      description: string;
-      callback_url: string;
-      prefill: { name: string; email: string; contact: string };
-      notes: string;
-    };
+    promoApplied?: { code: string; discountLabel: string; billingCycles: number | null };
   }> {
     if (!mongoose.Types.ObjectId.isValid(planId)) {
       throw new ApiError(400, MESSAGES.VALIDATION_ERROR);
@@ -442,6 +511,19 @@ export const subscriptionService = {
 
     const razorpayPlanId = await ensureRazorpayPlan(plan);
 
+    let appliedPromo: IPromoCodeDocument | null = null;
+    let promoDiscountedRupees: number | undefined;
+    let checkoutRazorpayPlanId = razorpayPlanId;
+    if (promoCode?.trim()) {
+      appliedPromo = await promoService.findValidPromoForPlan(promoCode, plan);
+      promoDiscountedRupees = promoService.calculateDiscountedAmount(plan.amount, appliedPromo);
+      checkoutRazorpayPlanId = await ensureRazorpayPlanAtAmount(
+        plan,
+        promoDiscountedRupees,
+        appliedPromo.code
+      );
+    }
+
     const customer = await razorpayService.findOrCreateCustomer({
       name: user.fullName,
       email: user.email,
@@ -452,6 +534,10 @@ export const subscriptionService = {
       userId,
       planId: plan._id,
       amount: plan.amount,
+      promoCode: appliedPromo?.code,
+      promoCodeId: appliedPromo?._id,
+      promoDiscountedAmount: promoDiscountedRupees,
+      promoBillingCycles: appliedPromo?.billingCycles,
       status: LibrarySubscriptionStatus.PENDING,
       paymentStatus: SubscriptionPaymentStatus.PENDING,
       isRecurring: true,
@@ -460,7 +546,7 @@ export const subscriptionService = {
     });
 
     const razorpaySub = await razorpayService.createSubscription({
-      planId: razorpayPlanId,
+      planId: checkoutRazorpayPlanId,
       customerId: customer.id,
       notifyEmail: user.email,
       notifyPhone: formatRazorpayContact(user.mobileNumber),
@@ -468,6 +554,12 @@ export const subscriptionService = {
         userId,
         planId: String(plan._id),
         subscriptionId: subscription._id.toString(),
+        ...(appliedPromo
+          ? {
+              promoCode: appliedPromo.code,
+              promoAmount: String(promoDiscountedRupees),
+            }
+          : {}),
       },
     });
 
@@ -493,59 +585,35 @@ export const subscriptionService = {
       );
     }
 
-    if (!razorpaySub.short_url) {
+    if (!razorpaySub.id) {
       subscription.status = LibrarySubscriptionStatus.CANCELLED;
       await subscription.save();
       throw new ApiError(500, MESSAGES.SUBSCRIPTION_PAYMENT_FAILED);
     }
 
-    const paymentUrl = await razorpayService.resolveSubscriptionAuthUrl(
-      razorpaySub.id,
-      razorpaySub.short_url
-    );
-
-    logger.info(LOG_TAG, 'Pending recurring subscription created', {
+    logger.info(LOG_TAG, 'Pending recurring subscription created — open Razorpay Checkout with subscription_id', {
       subscriptionId: subscription._id,
       razorpaySubscriptionId: razorpaySub.id,
       userId,
-      paymentUrl,
+      shortUrl: razorpaySub.short_url,
     });
 
-    const checkoutDescription =
-      plan.durationMonths === 1
-        ? `${plan.name} — auto-debit every month`
-        : `${plan.name} — auto-debit every ${plan.durationMonths} months`;
-
     return {
-      checkoutMode: 'subscription',
-      autoDebit: true,
-      /** Open this in browser — must be https://rzp.io/... (NOT api.razorpay.com/subscriptions/...) */
-      paymentUrl,
-      url: paymentUrl,
-      subscriptionAuthUrl: paymentUrl,
-      /** Same as paymentUrl — use if your app opens a Bridgr URL (redirects to Razorpay). */
-      redirectPaymentUrl: `${ENV.APP_BASE_URL}/api/v1/subscription/redirect-pay/${razorpaySub.id}`,
       razorpaySubscriptionId: razorpaySub.id,
       amount: toRupeesPaise(plan.amount),
+      discountedAmount:
+        promoDiscountedRupees != null ? toRupeesPaise(promoDiscountedRupees) : undefined,
       currency: plan.currency ?? 'INR',
       key: razorpayService.getPublicKey(),
       subscriptionId: subscription._id.toString(),
       isRecurring: true,
-      chargesEveryMonths: plan.durationMonths,
-      checkout: {
-        key: razorpayService.getPublicKey(),
-        subscription_id: razorpaySub.id,
-        name: 'Bridgr Library Subscription',
-        description: checkoutDescription,
-        callback_url: ENV.RAZORPAY_PAYMENT_CALLBACK_URL,
-        prefill: {
-          name: user.fullName,
-          email: user.email,
-          contact: formatRazorpayContact(user.mobileNumber),
-        },
-        notes:
-          'Open paymentUrl in browser or use subscription_id checkout. order_id does not enable auto-debit.',
-      },
+      promoApplied: appliedPromo
+        ? {
+            code: appliedPromo.code,
+            discountLabel: promoService.buildDiscountLabel(appliedPromo),
+            billingCycles: appliedPromo.billingCycles ?? null,
+          }
+        : undefined,
     };
   },
 

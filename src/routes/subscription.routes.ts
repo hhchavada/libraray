@@ -19,6 +19,13 @@ router.post(
 );
 
 router.post(
+  '/validate-promo',
+  protect,
+  validate(subscriptionValidation.validatePromo),
+  subscriptionController.validatePromo
+);
+
+router.post(
   '/verify-payment',
   protect,
   validate(subscriptionValidation.verifyPayment),

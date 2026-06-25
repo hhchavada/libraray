@@ -40,6 +40,7 @@ export interface CreateRazorpayCustomerInput {
 export interface CreateRazorpaySubscriptionInput {
   planId: string;
   customerId?: string;
+  offerId?: string;
   notes?: Record<string, string>;
   notifyEmail?: string;
   notifyPhone?: string;
@@ -179,6 +180,7 @@ export const razorpayService = {
       customer_notify: 0 | 1;
       notes?: Record<string, string>;
       customer_id?: string;
+      offer_id?: string;
       expire_by?: number;
       notify_info?: { notify_email?: string; notify_phone?: string };
     } = {
@@ -193,6 +195,10 @@ export const razorpayService = {
 
     if (input.customerId) {
       payload.customer_id = input.customerId;
+    }
+
+    if (input.offerId) {
+      payload.offer_id = input.offerId;
     }
 
     if (input.notifyEmail || input.notifyPhone) {
@@ -257,6 +263,25 @@ export const razorpayService = {
       razorpaySubscriptionId,
       cancelAtCycleEnd
     );
+  },
+
+  /** Switch subscription to a different plan (e.g. revert promo price after first cycle). */
+  async updateSubscriptionPlan(
+    razorpaySubscriptionId: string,
+    planId: string,
+    scheduleAt: 'now' | 'cycle_end' = 'cycle_end'
+  ) {
+    logger.info(LOG_TAG, 'Updating Razorpay subscription plan', {
+      razorpaySubscriptionId,
+      planId,
+      scheduleAt,
+    });
+
+    return getRazorpayClient().subscriptions.update(razorpaySubscriptionId, {
+      plan_id: planId,
+      schedule_change_at: scheduleAt,
+      customer_notify: 1,
+    });
   },
 
   async fetchSubscription(razorpaySubscriptionId: string): Promise<RazorpaySubscriptionDetails> {

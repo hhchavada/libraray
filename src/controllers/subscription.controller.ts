@@ -13,13 +13,20 @@ export const subscriptionController = {
   }),
 
   createOrder: asyncHandler(async (req: Request, res: Response) => {
-    const { planId, confirmReplace } = req.body;
+    const { planId, confirmReplace, promoCode } = req.body;
     const result = await subscriptionService.createOrder(
       getAuthUserId(req),
       planId,
-      Boolean(confirmReplace)
+      Boolean(confirmReplace),
+      promoCode
     );
     res.status(201).json(new ApiResponse(201, MESSAGES.SUBSCRIPTION_ORDER_CREATED, result));
+  }),
+
+  validatePromo: asyncHandler(async (req: Request, res: Response) => {
+    const { planId, promoCode } = req.body;
+    const result = await subscriptionService.validatePromo(planId, promoCode);
+    res.status(200).json(new ApiResponse(200, MESSAGES.PROMO_VALIDATED, result));
   }),
 
   verifyPayment: asyncHandler(async (req: Request, res: Response) => {

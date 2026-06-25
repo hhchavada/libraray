@@ -26,6 +26,13 @@ export interface ISubscription {
   isExtension: boolean;
   /** When true, a different active plan was replaced on activation. */
   replacedPrevious: boolean;
+  /** Applied user-facing promo code (uppercase). */
+  promoCode?: string;
+  promoCodeId?: Types.ObjectId;
+  /** Estimated first-cycle amount in rupees after promo (for GST / display). */
+  promoDiscountedAmount?: number;
+  /** Promo cycles at discounted Razorpay plan (null = all cycles). */
+  promoBillingCycles?: number;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -106,6 +113,23 @@ const subscriptionSchema = new Schema<ISubscriptionDocument>(
     replacedPrevious: {
       type: Boolean,
       default: false,
+    },
+    promoCode: {
+      type: String,
+      trim: true,
+      uppercase: true,
+    },
+    promoCodeId: {
+      type: Schema.Types.ObjectId,
+      ref: 'PromoCode',
+    },
+    promoDiscountedAmount: {
+      type: Number,
+      min: 0,
+    },
+    promoBillingCycles: {
+      type: Number,
+      min: 1,
     },
   },
   {

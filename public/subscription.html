@@ -20,7 +20,7 @@
 </head>
 <body>
   <h1>Recurring Subscription Test</h1>
-  <p class="hint">Uses <code>subscription_id</code> in Razorpay Checkout — required for monthly auto-debit mandate. Do <strong>not</strong> use <code>order_id</code>.</p>
+  <p class="hint">Uses Razorpay Checkout with <code>subscription_id</code> — required for monthly auto-debit. Do <strong>not</strong> open <code>paymentUrl</code> directly (hosted page may be disabled on merchant account).</p>
 
   <div id="msg"></div>
 
@@ -40,6 +40,7 @@
     <button id="logoutBtn" style="margin-top:10px;background:#64748b">Logout</button>
   </div>
 
+  <script src="https://checkout.razorpay.com/v1/checkout.js"></script>
   <script>
     const API = '/api/v1';
     const TOKEN_KEY = 'sub_test_token';
@@ -104,10 +105,42 @@
           body: JSON.stringify({ planId, confirmReplace: true }),
         });
         const d = order.data;
-        const paymentUrl = d.paymentUrl || d.url;
-        if (!paymentUrl) throw new Error('No payment URL returned');
+        if (!d.key || !d.razorpaySubscriptionId) {
+          throw new Error('Missing checkout fields — need key and razorpaySubscriptionId');
+        }
 
-        window.location.href = paymentUrl;
+        const options = {
+          key: d.key,
+          subscription_id: d.razorpaySubscriptionId,
+          name: 'Bridgr',
+          description: 'Monthly library subscription (auto-debit)',
+          handler: async function (response) {
+            try {
+              await api('/subscription/verify-payment', {
+                method: 'POST',
+                body: JSON.stringify({
+                  razorpay_payment_id: response.razorpay_payment_id,
+                  razorpay_subscription_id: response.razorpay_subscription_id,
+                  razorpay_signature: response.razorpay_signature,
+                }),
+              });
+              show('Payment successful — recurring mandate active.', 'success');
+            } catch (err) {
+              show(err.message || 'Verify failed', 'error');
+            }
+          },
+          modal: {
+            ondismiss: function () {
+              show('Checkout closed. You can try again.', 'error');
+            },
+          },
+        };
+
+        const rzp = new Razorpay(options);
+        rzp.on('payment.failed', function (resp) {
+          show(resp.error?.description || 'Payment failed', 'error');
+        });
+        rzp.open();
       } catch (e) {
         show(e.message, 'error');
       } finally {

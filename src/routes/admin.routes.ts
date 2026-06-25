@@ -64,4 +64,17 @@ router.get(
   adminController.getAllSubscriptions
 );
 
+router.get('/subscription/promo-codes', adminController.listPromoCodes);
+router.post(
+  '/subscription/promo-codes',
+  validate(subscriptionValidation.adminCreatePromo),
+  adminController.createPromoCode
+);
+router.put(
+  '/subscription/promo-codes/:promoId',
+  validate(subscriptionValidation.adminUpdatePromo),
+  adminController.updatePromoCode
+);
+router.patch('/subscription/promo-codes/:promoId/disable', adminController.disablePromoCode);
+
 export default router;

@@ -164,6 +164,11 @@ export enum SubscriptionPaymentStatus {
   FAILED = 'failed',
 }
 
+export enum PromoDiscountType {
+  PERCENTAGE = 'percentage',
+  FLAT = 'flat',
+}
+
 export enum RevenueDateFilter {
   TODAY = 'today',
   THIS_WEEK = 'this_week',

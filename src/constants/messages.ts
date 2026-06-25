@@ -127,7 +127,8 @@ export const MESSAGES = {
   REPORT_EXPORTED: 'Report exported successfully',
 
   // Subscription
-  SUBSCRIPTION_ORDER_CREATED: 'Razorpay recurring subscription created successfully',
+  SUBSCRIPTION_ORDER_CREATED:
+    'Razorpay recurring subscription created — open Razorpay Checkout with subscription_id',
   SUBSCRIPTION_ACTIVATED: 'Subscription activated successfully',
   SUBSCRIPTION_CANCELLED: 'Subscription cancelled successfully',
   SUBSCRIPTION_NOT_FOUND: 'Subscription not found',
@@ -149,5 +150,20 @@ export const MESSAGES = {
   SUBSCRIPTION_PLAN_UPDATED: 'Subscription plan updated successfully',
   SUBSCRIPTION_PLAN_DISABLED: 'Subscription plan disabled successfully',
   SUBSCRIPTION_ADMIN_LIST_FETCHED: 'Subscriptions fetched successfully',
+
+  PROMO_VALIDATED: 'Promo code applied successfully',
+  PROMO_INVALID: 'Invalid or expired promo code',
+  PROMO_NOT_FOUND: 'Promo code not found',
+  PROMO_NOT_STARTED: 'This promo code is not active yet',
+  PROMO_EXPIRED: 'This promo code has expired',
+  PROMO_USAGE_LIMIT_REACHED: 'This promo code has reached its usage limit',
+  PROMO_NOT_APPLICABLE_TO_PLAN: 'This promo code is not valid for the selected plan',
+  PROMO_DISCOUNT_TOO_HIGH: 'Promo discount exceeds the minimum payable amount',
+  PROMO_INVALID_CONFIGURATION: 'Promo code is misconfigured',
+  PROMO_CREATED: 'Promo code created successfully',
+  PROMO_UPDATED: 'Promo code updated successfully',
+  PROMO_DISABLED: 'Promo code disabled successfully',
+  PROMO_LIST_FETCHED: 'Promo codes fetched successfully',
+
   RAZORPAY_NOT_CONFIGURED: 'Razorpay credentials are not configured',
 };

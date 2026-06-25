@@ -3,6 +3,7 @@ import {
   LibrarySubscriptionStatus,
   PlanCategory,
   PlanDurationType,
+  PromoDiscountType,
   SubscriptionPaymentStatus,
 } from '../constants/enums';
 
@@ -10,6 +11,12 @@ export const subscriptionValidation = {
   createOrder: Joi.object({
     planId: Joi.string().hex().length(24).required(),
     confirmReplace: Joi.boolean().optional().default(false),
+    promoCode: Joi.string().trim().min(2).max(40).optional(),
+  }),
+
+  validatePromo: Joi.object({
+    planId: Joi.string().hex().length(24).required(),
+    promoCode: Joi.string().trim().min(2).max(40).required(),
   }),
 
   verifyPayment: Joi.object({
@@ -64,4 +71,34 @@ export const subscriptionValidation = {
       .valid(...Object.values(SubscriptionPaymentStatus))
       .optional(),
   }),
+
+  adminCreatePromo: Joi.object({
+    code: Joi.string().trim().min(2).max(40).required(),
+    discountType: Joi.string()
+      .valid(...Object.values(PromoDiscountType))
+      .required(),
+    discountValue: Joi.number().positive().required(),
+    discountLabel: Joi.string().trim().max(120).optional(),
+    billingCycles: Joi.number().integer().min(1).optional(),
+    applicablePlanIds: Joi.array().items(Joi.string().hex().length(24)).optional().default([]),
+    maxUses: Joi.number().integer().min(1).optional(),
+    validFrom: Joi.date().iso().optional(),
+    validUntil: Joi.date().iso().optional(),
+    isActive: Joi.boolean().optional().default(true),
+  }),
+
+  adminUpdatePromo: Joi.object({
+    code: Joi.string().trim().min(2).max(40).optional(),
+    discountType: Joi.string()
+      .valid(...Object.values(PromoDiscountType))
+      .optional(),
+    discountValue: Joi.number().positive().optional(),
+    discountLabel: Joi.string().trim().max(120).optional().allow(''),
+    billingCycles: Joi.number().integer().min(1).optional().allow(null),
+    applicablePlanIds: Joi.array().items(Joi.string().hex().length(24)).optional(),
+    maxUses: Joi.number().integer().min(1).optional().allow(null),
+    validFrom: Joi.date().iso().optional().allow(null),
+    validUntil: Joi.date().iso().optional().allow(null),
+    isActive: Joi.boolean().optional(),
+  }).min(1),
 };
