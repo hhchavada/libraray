@@ -10,15 +10,25 @@ const LOG_TAG = 'Razorpay';
 
 /** Razorpay rejects subscription end_time beyond ~year 2121 (unix 4765046400). */
 const RAZORPAY_MAX_END_UNIX = 4_765_046_400;
+/** Recurring mandate length — auto-debit runs for this many years, then user re-subscribes. */
+const SUBSCRIPTION_AUTO_DEBIT_YEARS = 2;
 const AVG_MONTH_SECONDS = 30 * 24 * 60 * 60;
 
-/** Max billing cycles that keep subscription end_time within Razorpay limits. */
+/**
+ * Billing cycles for Razorpay subscription (controls mandate / auto-cut expiry).
+ * Capped at SUBSCRIPTION_AUTO_DEBIT_YEARS and within Razorpay/UPI platform limits.
+ */
 export const getSafeSubscriptionTotalCount = (intervalMonths: number): number => {
   const interval = Math.max(1, intervalMonths);
+
+  const autoDebitMaxCycles = Math.floor((SUBSCRIPTION_AUTO_DEBIT_YEARS * 12) / interval);
+
   const nowUnix = Math.floor(Date.now() / 1000);
   const remainingSeconds = RAZORPAY_MAX_END_UNIX - nowUnix;
-  const maxCycles = Math.floor(remainingSeconds / (interval * AVG_MONTH_SECONDS)) - 6;
-  return Math.max(12, Math.min(maxCycles, 999));
+  const platformMaxCycles = Math.floor(remainingSeconds / (interval * AVG_MONTH_SECONDS)) - 6;
+
+  const totalCount = Math.min(autoDebitMaxCycles, platformMaxCycles);
+  return Math.max(1, totalCount);
 };
 
 let razorpayInstance: Razorpay | null = null;
