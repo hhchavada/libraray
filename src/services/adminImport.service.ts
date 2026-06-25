@@ -12,7 +12,7 @@ import {
   MEMBERSHIP_PLAN_MONTHS,
   normalizeMembershipPlan,
 } from '../constants/enums';
-import { addMonths } from '../utils/subscription.util';
+import { computeMemberEndDate, normalizeMemberDate } from '../utils/memberExpiry.util';
 
 const REQUIRED_COLUMNS = ['fullName', 'mobileNumber', 'shiftType', 'startDate', 'type'] as const;
 
@@ -248,10 +248,12 @@ const resolveEndDate = (
   membershipPlan: MembershipPlan | undefined,
   type: CreateMemberType
 ): Date | undefined => {
-  if (endDate) return endDate;
-  if (type === 'demo') return undefined;
+  if (type === 'demo') {
+    return endDate ? normalizeMemberDate(endDate) : undefined;
+  }
+  if (endDate) return normalizeMemberDate(endDate);
   const months = membershipPlan ? MEMBERSHIP_PLAN_MONTHS[membershipPlan] : 1;
-  return addMonths(startDate, months);
+  return computeMemberEndDate(startDate, months);
 };
 
 const resolveImportNumbers = (
@@ -304,10 +306,10 @@ const parsePaymentMode = (v: unknown): PaymentMode => {
 };
 
 const parseDate = (v: unknown): Date => {
-  if (v instanceof Date) return v;
+  if (v instanceof Date) return normalizeMemberDate(v);
   const d = new Date(String(v));
   if (isNaN(d.getTime())) throw new Error(`Invalid date: ${v}`);
-  return d;
+  return normalizeMemberDate(d);
 };
 
 const parseOptionalString = (v: unknown): string | undefined => {

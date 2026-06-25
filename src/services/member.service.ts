@@ -13,12 +13,15 @@ import {
   ShiftType,
 } from '../constants/enums';
 import { seatService } from './seat.service';
-import { addMonths } from '../utils/subscription.util';
 import {
+  addCalendarMonths,
+  computeMemberEndDate,
+  daysUntilMemberExpiry,
   initialMemberStatus,
   isMembershipExpired,
+  normalizeMemberDate,
   resolveMemberStatusOnUpdate,
-  startOfDay,
+  startOfTodayIST,
 } from '../utils/memberExpiry.util';
 
 export interface MemberFilters {
@@ -151,6 +154,15 @@ const calculateFees = (data: {
   return { feesAfterDiscount, totalFee, dueAmount, paymentStatus };
 };
 
+const resolveMemberPlanDates = (
+  startDate: Date,
+  membershipPlan: MembershipPlan
+): { startDate: Date; endDate: Date } => {
+  const start = normalizeMemberDate(startDate);
+  const end = computeMemberEndDate(start, resolvePlanMonths(membershipPlan));
+  return { startDate: start, endDate: end };
+};
+
 const resolvePaymentStatus = (amountPaid: number, dueAmount: number): PaymentStatus => {
   if (amountPaid === 0) return PaymentStatus.UNPAID;
   if (dueAmount === 0) return PaymentStatus.PAID;
@@ -281,6 +293,8 @@ export const memberService = {
       amountPaid: data.amountPaid,
     });
 
+    const { startDate, endDate } = resolveMemberPlanDates(data.startDate, data.membershipPlan);
+
     const member = await Member.create({
       library: libraryId,
       memberId,
@@ -291,8 +305,8 @@ export const memberService = {
       memberType: MemberType.PERMANENT,
       membershipPlan: data.membershipPlan,
       shiftType: data.shiftType,
-      startDate: data.startDate,
-      endDate: data.endDate,
+      startDate,
+      endDate,
       feePerMonth: data.feePerMonth,
       discount: data.discount ?? 0,
       feesAfterDiscount,
@@ -301,7 +315,7 @@ export const memberService = {
       dueAmount,
       paymentStatus,
       paymentMode: data.paymentMode,
-      status: initialMemberStatus(data.endDate),
+      status: initialMemberStatus(endDate),
       ...(remarksForDb(data.remarks) ? { remarks: remarksForDb(data.remarks) } : {}),
     });
 
@@ -331,9 +345,10 @@ export const memberService = {
     };
 
     if (data.endDate) {
-      payload.endDate = data.endDate;
+      payload.endDate = normalizeMemberDate(data.endDate);
     }
-    payload.status = initialMemberStatus(data.endDate);
+    payload.startDate = normalizeMemberDate(data.startDate);
+    payload.status = initialMemberStatus(payload.endDate as Date | undefined);
     const remarks = remarksForDb(data.remarks);
     if (remarks) {
       payload.remarks = remarks;
@@ -363,6 +378,8 @@ export const memberService = {
       amountPaid: data.amountPaid,
     });
 
+    const { startDate, endDate } = resolveMemberPlanDates(data.startDate, data.membershipPlan);
+
     return Member.create({
       library: libraryId,
       memberId,
@@ -373,8 +390,8 @@ export const memberService = {
       memberType: MemberType.WITHOUT_SEAT,
       membershipPlan: data.membershipPlan,
       shiftType: data.shiftType,
-      startDate: data.startDate,
-      endDate: data.endDate,
+      startDate,
+      endDate,
       feePerMonth: data.feePerMonth,
       discount: data.discount ?? 0,
       feesAfterDiscount,
@@ -383,7 +400,7 @@ export const memberService = {
       dueAmount,
       paymentStatus,
       paymentMode: data.paymentMode,
-      status: initialMemberStatus(data.endDate),
+      status: initialMemberStatus(endDate),
       ...(remarksForDb(data.remarks) ? { remarks: remarksForDb(data.remarks) } : {}),
     });
   },
@@ -576,9 +593,9 @@ export const memberService = {
       throw new ApiError(400, MESSAGES.INVALID_MEMBERSHIP_PLAN);
     }
 
-    const endDate = new Date(data.endDate);
-    const startDate = data.startDate ? new Date(data.startDate) : new Date(member.startDate);
-    if (endDate <= startDate) {
+    const startDate = normalizeMemberDate(data.startDate ?? member.startDate);
+    const endDate = computeMemberEndDate(startDate, resolvePlanMonths(normalized));
+    if (endDate.getTime() <= startDate.getTime()) {
       throw new ApiError(400, MESSAGES.END_DATE_AFTER_START);
     }
 
@@ -665,10 +682,10 @@ export const memberService = {
     const discount = data.discount ?? member.discount ?? 0;
     const planMonths = resolvePlanMonths(membershipPlan);
 
-    const now = new Date();
-    const previousEndDate = new Date(member.endDate ?? new Date());
-    const renewalStart = previousEndDate > now ? previousEndDate : now;
-    const newEndDate = addMonths(renewalStart, planMonths);
+    const now = startOfTodayIST();
+    const previousEndDate = normalizeMemberDate(member.endDate ?? new Date());
+    const renewalStart = previousEndDate.getTime() >= now.getTime() ? previousEndDate : now;
+    const newEndDate = addCalendarMonths(renewalStart, planMonths);
 
     const renewalPeriod = calculateFees({
       feePerMonth,
@@ -725,8 +742,8 @@ export const memberService = {
     if (data.email !== undefined) member.email = data.email;
     if (data.courseName !== undefined) member.courseName = data.courseName;
     if (data.shiftType) member.shiftType = data.shiftType;
-    if (data.startDate) member.startDate = data.startDate;
-    if (data.endDate) member.endDate = data.endDate;
+    if (data.startDate) member.startDate = normalizeMemberDate(data.startDate);
+    if (data.endDate) member.endDate = normalizeMemberDate(data.endDate);
     if (data.feePerMonth !== undefined) member.feePerMonth = data.feePerMonth;
     if (data.discount !== undefined) member.discount = data.discount;
     if (data.membershipPlan) {
@@ -799,11 +816,11 @@ export const memberService = {
   },
 
   async syncExpiredMembers(libraryId: string): Promise<number> {
-    const today = startOfDay();
+    const today = startOfTodayIST();
     const query = {
       library: libraryId,
       status: MemberStatus.ACTIVE,
-      endDate: { $lt: today },
+      endDate: { $lte: today },
     };
 
     const expiredWithSeats = await Member.find(query).select('seat');
@@ -836,8 +853,7 @@ export const memberService = {
   }> {
     await this.syncExpiredMembers(libraryId);
 
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
+    const today = startOfTodayIST();
 
     const fiveDaysLater = new Date(today);
     fiveDaysLater.setDate(fiveDaysLater.getDate() + 5);
@@ -851,12 +867,9 @@ export const memberService = {
       .populate('seat')
       .sort({ endDate: 1 });
 
-    const now = new Date();
     const membersWithDays = members.map((m) => {
       const memberObj = m.toJSON();
-      const endDate = new Date(m.endDate as Date);
-      const diffMs = endDate.getTime() - now.getTime();
-      const daysRemaining = Math.max(0, Math.ceil(diffMs / (1000 * 60 * 60 * 24)));
+      const daysRemaining = daysUntilMemberExpiry(m.endDate as Date);
       return {
         ...memberObj,
         daysRemaining,

@@ -6,6 +6,23 @@ export const toValidObjectIds = (ids: string[]): mongoose.Types.ObjectId[] =>
     .filter((id) => id && mongoose.Types.ObjectId.isValid(id))
     .map((id) => new mongoose.Types.ObjectId(id));
 
+/** Extract library owner user id — null if missing or not a valid ObjectId. */
+export const resolveOwnerId = (owner: unknown): string | null => {
+  if (!owner) return null;
+  if (owner instanceof mongoose.Types.ObjectId) {
+    return owner.toString();
+  }
+  if (typeof owner === 'object' && owner !== null && '_id' in owner) {
+    const id = (owner as { _id?: unknown })._id;
+    if (id instanceof mongoose.Types.ObjectId) return id.toString();
+    if (typeof id === 'string' && mongoose.Types.ObjectId.isValid(id)) return id;
+  }
+  if (typeof owner === 'string' && mongoose.Types.ObjectId.isValid(owner)) {
+    return owner;
+  }
+  return null;
+};
+
 export interface AdminFilters {
   dateFilter: AdminDateFilter;
   dateFrom?: Date;

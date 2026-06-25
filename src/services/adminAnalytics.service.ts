@@ -15,7 +15,7 @@ import {
   SeatStatus,
   SubscriptionPaymentStatus,
 } from '../constants/enums';
-import { AdminFilters, getAdminDateRange, planCategoryFromSeats, toValidObjectIds } from '../utils/adminFilter.util';
+import { AdminFilters, getAdminDateRange, planCategoryFromSeats, resolveOwnerId, toValidObjectIds } from '../utils/adminFilter.util';
 import {
   isPaidSubscription,
   resolveLibraryLifecycleStatus,
@@ -106,18 +106,20 @@ const buildLibraryContexts = async (libraryIds: mongoose.Types.ObjectId[]): Prom
     .populate('owner', 'fullName email mobileNumber createdAt')
     .lean<LibraryLean[]>();
 
-  const ownerIds = libraries.map((l) => {
-    const o = l.owner;
-    return typeof o === 'object' && o && '_id' in o ? o._id : (o as mongoose.Types.ObjectId);
-  });
+  const ownerIds = toValidObjectIds(
+    libraries.map((l) => resolveOwnerId(l.owner)).filter((id): id is string => id !== null)
+  );
 
-  const subscriptions = await Subscription.find({
-    userId: { $in: ownerIds },
-    paymentStatus: SubscriptionPaymentStatus.PAID,
-  })
-    .sort({ createdAt: -1 })
-    .populate('planId')
-    .lean();
+  const subscriptions =
+    ownerIds.length === 0
+      ? []
+      : await Subscription.find({
+          userId: { $in: ownerIds },
+          paymentStatus: SubscriptionPaymentStatus.PAID,
+        })
+          .sort({ createdAt: -1 })
+          .populate('planId')
+          .lean();
 
   const subsByOwner = new Map<string, typeof subscriptions>();
   for (const sub of subscriptions) {
@@ -129,7 +131,7 @@ const buildLibraryContexts = async (libraryIds: mongoose.Types.ObjectId[]): Prom
   return libraries.map((lib) => {
     const ownerDoc =
       typeof lib.owner === 'object' && lib.owner && 'fullName' in lib.owner ? lib.owner : null;
-    const ownerId = ownerDoc?._id?.toString() ?? String(lib.owner);
+    const ownerId = resolveOwnerId(lib.owner) ?? '';
     const ownerSubs = subsByOwner.get(ownerId) ?? [];
     const latestPaid = ownerSubs[0];
     const activePaid = ownerSubs.find(

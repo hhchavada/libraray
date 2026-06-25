@@ -8,7 +8,7 @@ import { MESSAGES } from '../constants/messages';
 import { MemberStatus, MemberType, PlanCategory, SeatStatus, SubscriptionPaymentStatus, LibrarySubscriptionStatus } from '../constants/enums';
 import { seatService } from './seat.service';
 import { formatMemberLabels, formatSeatLabels } from '../utils/formatLabel.util';
-import { AdminFilters, planCategoryFromSeats } from '../utils/adminFilter.util';
+import { AdminFilters, planCategoryFromSeats, resolveOwnerId, toValidObjectIds } from '../utils/adminFilter.util';
 import { buildLibraryQuery } from './adminAnalytics.service';
 import { PLAN_CATEGORY_LABELS } from '../constants/subscriptionPlans.data';
 
@@ -210,21 +210,14 @@ const buildLibraryStats = async (
   };
 };
 
-const getOwnerId = (owner: unknown): string => {
-  const ownerDoc = owner as { _id?: mongoose.Types.ObjectId } | mongoose.Types.ObjectId | null;
-  if (ownerDoc && typeof ownerDoc === 'object' && '_id' in ownerDoc && ownerDoc._id) {
-    return ownerDoc._id.toString();
-  }
-  return String(ownerDoc);
-};
-
 const getSubscriptionPlansByOwnerIds = async (
   ownerIds: string[]
 ): Promise<Map<string, AdminLibraryRow['subscriptionPlan']>> => {
-  if (ownerIds.length === 0) return new Map();
+  const validOwnerIds = toValidObjectIds(ownerIds);
+  if (validOwnerIds.length === 0) return new Map();
 
   const subscriptions = await Subscription.find({
-    userId: { $in: ownerIds },
+    userId: { $in: validOwnerIds },
     paymentStatus: SubscriptionPaymentStatus.PAID,
   })
     .sort({ createdAt: -1 })
@@ -239,7 +232,7 @@ const getSubscriptionPlansByOwnerIds = async (
   }
 
   const planMap = new Map<string, AdminLibraryRow['subscriptionPlan']>();
-  for (const ownerId of ownerIds) {
+  for (const ownerId of ownerIds.filter((id) => mongoose.Types.ObjectId.isValid(id))) {
     const ownerSubs = subsByOwner.get(ownerId) ?? [];
     const latestPaid = ownerSubs[0];
     const activePaid = ownerSubs.find(
@@ -274,11 +267,16 @@ export const adminService = {
       .sort({ createdAt: -1 })
       .lean();
 
-    const ownerIds = libraries.map((lib) => getOwnerId(lib.owner));
+    const ownerIds = libraries
+      .map((lib) => resolveOwnerId(lib.owner))
+      .filter((id): id is string => id !== null);
     const planMap = await getSubscriptionPlansByOwnerIds(ownerIds);
 
     const libraryRows = await Promise.all(
-      libraries.map((lib) => buildLibraryStats(lib, planMap.get(getOwnerId(lib.owner))))
+      libraries.map((lib) => {
+        const ownerId = resolveOwnerId(lib.owner);
+        return buildLibraryStats(lib, ownerId ? planMap.get(ownerId) : undefined);
+      })
     );
 
     const summary = libraryRows.reduce(
@@ -325,9 +323,11 @@ export const adminService = {
       throw new ApiError(404, MESSAGES.LIBRARY_NOT_FOUND);
     }
 
-    const ownerId = getOwnerId(library.owner);
-    const planMap = await getSubscriptionPlansByOwnerIds([ownerId]);
-    const stats = await buildLibraryStats(library, planMap.get(ownerId));
+    const ownerId = resolveOwnerId(library.owner);
+    const planMap = ownerId
+      ? await getSubscriptionPlansByOwnerIds([ownerId])
+      : new Map<string, AdminLibraryRow['subscriptionPlan']>();
+    const stats = await buildLibraryStats(library, ownerId ? planMap.get(ownerId) : undefined);
 
     const [members, seatsRaw] = await Promise.all([
       Member.find({ library: libraryId })
