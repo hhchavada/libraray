@@ -8,6 +8,19 @@ import { toRupeesPaise } from '../utils/subscription.util';
 
 const LOG_TAG = 'Razorpay';
 
+/** Razorpay rejects subscription end_time beyond ~year 2121 (unix 4765046400). */
+const RAZORPAY_MAX_END_UNIX = 4_765_046_400;
+const AVG_MONTH_SECONDS = 30 * 24 * 60 * 60;
+
+/** Max billing cycles that keep subscription end_time within Razorpay limits. */
+export const getSafeSubscriptionTotalCount = (intervalMonths: number): number => {
+  const interval = Math.max(1, intervalMonths);
+  const nowUnix = Math.floor(Date.now() / 1000);
+  const remainingSeconds = RAZORPAY_MAX_END_UNIX - nowUnix;
+  const maxCycles = Math.floor(remainingSeconds / (interval * AVG_MONTH_SECONDS)) - 6;
+  return Math.max(12, Math.min(maxCycles, 999));
+};
+
 let razorpayInstance: Razorpay | null = null;
 
 export const getRazorpayClient = (): Razorpay => {
@@ -39,6 +52,8 @@ export interface CreateRazorpayCustomerInput {
 
 export interface CreateRazorpaySubscriptionInput {
   planId: string;
+  /** Plan billing interval in months (1 = monthly). Used to cap total_count. */
+  intervalMonths: number;
   customerId?: string;
   offerId?: string;
   notes?: Record<string, string>;
@@ -174,6 +189,8 @@ export const razorpayService = {
       customerId: input.customerId,
     });
 
+    const totalCount = getSafeSubscriptionTotalCount(input.intervalMonths);
+
     const payload: {
       plan_id: string;
       total_count: number;
@@ -185,13 +202,17 @@ export const razorpayService = {
       notify_info?: { notify_email?: string; notify_phone?: string };
     } = {
       plan_id: input.planId,
-      // High cycle count — effectively runs until user/admin cancels.
-      total_count: 1200,
+      total_count: totalCount,
       customer_notify: 1,
       notes: input.notes,
       // Hosted checkout link valid for 30 days.
       expire_by: Math.floor(Date.now() / 1000) + 30 * 24 * 60 * 60,
     };
+
+    logger.info(LOG_TAG, 'Subscription total_count capped for Razorpay end_time limit', {
+      intervalMonths: input.intervalMonths,
+      totalCount,
+    });
 
     if (input.customerId) {
       payload.customer_id = input.customerId;

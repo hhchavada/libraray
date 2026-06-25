@@ -547,6 +547,7 @@ export const subscriptionService = {
 
     const razorpaySub = await razorpayService.createSubscription({
       planId: checkoutRazorpayPlanId,
+      intervalMonths: plan.durationMonths,
       customerId: customer.id,
       notifyEmail: user.email,
       notifyPhone: formatRazorpayContact(user.mobileNumber),

@@ -12,6 +12,7 @@ async function main() {
 
     const sub = await razorpayService.createSubscription({
       planId: 'plan_T2i2oeESMcGAN5',
+      intervalMonths: 1,
       customerId: (customer as { id: string }).id,
       notifyEmail: 'admin@library.com',
       notifyPhone: formatRazorpayContact('9000000000'),
