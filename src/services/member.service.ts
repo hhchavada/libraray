@@ -691,9 +691,10 @@ export const memberService = {
     const amountPaid = data.amountPaid ?? 0;
 
     const now = startOfTodayIST();
-    const previousEndDate = normalizeMemberDate(member.endDate ?? new Date());
-    const renewalStart = previousEndDate.getTime() >= now.getTime() ? previousEndDate : now;
-    const newEndDate = addCalendarMonths(renewalStart, planMonths);
+    const previousEndDate = normalizeMemberDate(member.endDate ?? now);
+    // Always extend from the previous expiry date so the billing anchor day is preserved
+    // (e.g. expired 21 Jun + 1 month → 21 Jul, not 27 Jul when renewed late on the 27th).
+    const newEndDate = addCalendarMonths(previousEndDate, planMonths);
 
     const renewalPeriod = calculateFees({
       feePerMonth,
