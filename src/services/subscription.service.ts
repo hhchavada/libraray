@@ -250,6 +250,30 @@ export const subscriptionService = {
       return active;
     }
 
+    // Recover subscriptions wrongly marked expired during first-payment webhook race.
+    let recoveryQuery = Subscription.findOne({
+      userId,
+      paymentStatus: SubscriptionPaymentStatus.PAID,
+      endDate: { $gt: now },
+      status: LibrarySubscriptionStatus.EXPIRED,
+    }).sort({ endDate: -1 });
+
+    if (populatePlan) {
+      recoveryQuery = recoveryQuery.populate('planId');
+    }
+
+    const recoverable = await recoveryQuery;
+    if (recoverable) {
+      recoverable.status = LibrarySubscriptionStatus.ACTIVE;
+      await recoverable.save();
+      logger.info(LOG_TAG, 'Recovered wrongly expired subscription', {
+        subscriptionId: recoverable._id,
+        userId,
+        endDate: recoverable.endDate,
+      });
+      return recoverable;
+    }
+
     await Subscription.updateMany(
       {
         userId,
@@ -435,6 +459,39 @@ export const subscriptionService = {
         razorpaySubscriptionId,
       });
       return null;
+    }
+
+    // Same payment as the active period — idempotent first-cycle activation, not a renewal.
+    if (active.razorpayPaymentId === razorpayPaymentId) {
+      logger.info(LOG_TAG, 'Recurring charge ignored — payment already linked to active subscription', {
+        razorpaySubscriptionId,
+        paymentId: razorpayPaymentId,
+        subscriptionId: active._id,
+      });
+      await schedulePromoRevertToFullPrice(active);
+      return active.populate('planId');
+    }
+
+    let paidCount = 0;
+    try {
+      const rzSub = await razorpayService.fetchSubscription(razorpaySubscriptionId);
+      paidCount = rzSub.paid_count ?? 0;
+    } catch (err) {
+      logger.warn(LOG_TAG, 'Could not fetch Razorpay paid_count before renewal', {
+        razorpaySubscriptionId,
+        err,
+      });
+    }
+
+    if (paidCount <= 1) {
+      logger.info(LOG_TAG, 'Recurring charge skipped — first billing cycle not a renewal', {
+        razorpaySubscriptionId,
+        paymentId: razorpayPaymentId,
+        paidCount,
+        subscriptionId: active._id,
+      });
+      await schedulePromoRevertToFullPrice(active);
+      return active.populate('planId');
     }
 
     const plan = await SubscriptionPlan.findById(active.planId);
@@ -934,7 +991,26 @@ export const subscriptionService = {
 
   async getCurrentSubscription(userId: string) {
     await this.syncPendingSubscriptionFromRazorpay(userId);
-    return this.findActiveSubscription(userId, true);
+    const subscription = await this.findActiveSubscription(userId, true);
+
+    if (subscription && !subscription.razorpaySubscriptionId) {
+      const matches = await razorpayService.findSubscriptionsByMongoSubscriptionId(
+        subscription._id.toString()
+      );
+      const activeMatch = matches.find((s) =>
+        ['active', 'authenticated', 'completed'].includes(s.status)
+      );
+      if (activeMatch?.id) {
+        subscription.razorpaySubscriptionId = activeMatch.id;
+        await subscription.save();
+        logger.info(LOG_TAG, 'Restored missing razorpaySubscriptionId on active subscription', {
+          subscriptionId: subscription._id,
+          razorpaySubscriptionId: activeMatch.id,
+        });
+      }
+    }
+
+    return subscription;
   },
 
   /** Debug Razorpay recurring status for the logged-in user. */
