@@ -82,6 +82,7 @@ export interface RazorpaySubscriptionDetails {
   current_end?: number;
   ended_at?: number | null;
   short_url?: string;
+  has_scheduled_changes?: boolean;
 }
 
 /** 10-digit Indian mobile for Razorpay Customer API (no +91 prefix). */
@@ -318,6 +319,41 @@ export const razorpayService = {
   async fetchSubscription(razorpaySubscriptionId: string): Promise<RazorpaySubscriptionDetails> {
     const sub = await getRazorpayClient().subscriptions.fetch(razorpaySubscriptionId);
     return sub as unknown as RazorpaySubscriptionDetails;
+  },
+
+  async fetchPlanAmountPaise(planId: string): Promise<number | null> {
+    try {
+      const plan = await this.fetchPlan(planId);
+      const amount = Number((plan as { item?: { amount?: number } }).item?.amount);
+      return Number.isFinite(amount) ? amount : null;
+    } catch {
+      return null;
+    }
+  },
+
+  /** Pending plan change scheduled with schedule_change_at: cycle_end. */
+  async fetchScheduledChanges(
+    razorpaySubscriptionId: string
+  ): Promise<RazorpaySubscriptionDetails | null> {
+    try {
+      const client = getRazorpayClient() as Razorpay & {
+        api: { get: (opts: { url: string }) => Promise<unknown> };
+      };
+      const result = await client.api.get({
+        url: `/subscriptions/${razorpaySubscriptionId}/retrieve_scheduled_changes`,
+      });
+      return result as RazorpaySubscriptionDetails;
+    } catch (err) {
+      const message = String((err as { error?: { description?: string } })?.error?.description ?? '');
+      if (message.toLowerCase().includes('no pending update')) {
+        return null;
+      }
+      logger.warn(LOG_TAG, 'Could not fetch scheduled subscription changes', {
+        razorpaySubscriptionId,
+        err,
+      });
+      return null;
+    }
   },
 
   async fetchLatestPaidPaymentForSubscription(

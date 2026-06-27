@@ -131,13 +131,23 @@ const ensureRazorpayPlanAtAmount = async (
   return razorpayPlan.id;
 };
 
+const needsFirstCyclePromoRevert = (subscription: ISubscriptionDocument): boolean => {
+  if (!subscription.razorpaySubscriptionId || subscription.promoRevertScheduled) {
+    return false;
+  }
+  if (subscription.promoBillingCycles !== 1) {
+    return false;
+  }
+  if (subscription.promoDiscountedAmount == null) {
+    return false;
+  }
+  return subscription.promoDiscountedAmount < subscription.amount;
+};
+
 const schedulePromoRevertToFullPrice = async (
   subscription: ISubscriptionDocument
 ): Promise<void> => {
-  if (!subscription.razorpaySubscriptionId || subscription.promoBillingCycles !== 1) {
-    return;
-  }
-  if (subscription.promoRevertScheduled) {
+  if (!needsFirstCyclePromoRevert(subscription)) {
     return;
   }
 
@@ -146,9 +156,12 @@ const schedulePromoRevertToFullPrice = async (
     return;
   }
 
+  const fullPlanId = await ensureRazorpayPlan(plan);
+  const fullAmountPaise = toRupeesPaise(plan.amount);
+
   let rzSub: RazorpaySubscriptionDetails;
   try {
-    rzSub = await razorpayService.fetchSubscription(subscription.razorpaySubscriptionId);
+    rzSub = await razorpayService.fetchSubscription(subscription.razorpaySubscriptionId!);
   } catch (err) {
     logger.warn(LOG_TAG, 'Could not fetch Razorpay subscription for promo revert', {
       subscriptionId: subscription._id,
@@ -158,9 +171,9 @@ const schedulePromoRevertToFullPrice = async (
     return;
   }
 
-  const schedulableStatuses = ['active', 'authenticated', 'completed'];
+  const schedulableStatuses = ['authenticated', 'active', 'completed'];
   if (!schedulableStatuses.includes(rzSub.status)) {
-    logger.info(LOG_TAG, 'Promo revert deferred until subscription is active', {
+    logger.info(LOG_TAG, 'Promo revert deferred until subscription is authenticated/active', {
       subscriptionId: subscription._id,
       razorpaySubscriptionId: subscription.razorpaySubscriptionId,
       status: rzSub.status,
@@ -168,36 +181,104 @@ const schedulePromoRevertToFullPrice = async (
     return;
   }
 
-  const fullPlanId = await ensureRazorpayPlan(plan);
-  if (rzSub.plan_id === fullPlanId) {
+  const currentPlanPaise = rzSub.plan_id
+    ? await razorpayService.fetchPlanAmountPaise(rzSub.plan_id)
+    : null;
+
+  if (currentPlanPaise === fullAmountPaise) {
     await Subscription.updateOne(
       { _id: subscription._id },
       { $set: { promoRevertScheduled: true } }
     );
+    logger.info(LOG_TAG, 'Razorpay subscription already on full plan price', {
+      subscriptionId: subscription._id,
+      fullAmount: plan.amount,
+    });
     return;
   }
 
-  try {
-    await razorpayService.updateSubscriptionPlan(
-      subscription.razorpaySubscriptionId,
-      fullPlanId,
-      'cycle_end'
-    );
+  const scheduled = await razorpayService.fetchScheduledChanges(subscription.razorpaySubscriptionId!);
+  if (scheduled?.plan_id === fullPlanId) {
     await Subscription.updateOne(
       { _id: subscription._id },
       { $set: { promoRevertScheduled: true } }
     );
-    logger.info(LOG_TAG, 'Scheduled Razorpay subscription revert to full plan price', {
+    logger.info(LOG_TAG, 'Full plan price already scheduled on Razorpay subscription', {
       subscriptionId: subscription._id,
-      razorpaySubscriptionId: subscription.razorpaySubscriptionId,
-      promoBillingCycles: subscription.promoBillingCycles,
       fullPlanId,
       fullAmount: plan.amount,
     });
-  } catch (err) {
-    logger.warn(LOG_TAG, 'Could not schedule promo revert to full plan price', {
+    return;
+  }
+
+  const paidCount = rzSub.paid_count ?? 0;
+  // After first charge: switch plan immediately so future auto-debits use full price.
+  // Before first charge: schedule at cycle_end so the first invoice stays discounted.
+  const scheduleAt: 'now' | 'cycle_end' = paidCount >= 1 ? 'now' : 'cycle_end';
+
+  try {
+    await razorpayService.updateSubscriptionPlan(
+      subscription.razorpaySubscriptionId!,
+      fullPlanId,
+      scheduleAt
+    );
+
+    const updated = await razorpayService.fetchSubscription(subscription.razorpaySubscriptionId!);
+    const updatedPlanPaise = updated.plan_id
+      ? await razorpayService.fetchPlanAmountPaise(updated.plan_id)
+      : null;
+    const pending = await razorpayService.fetchScheduledChanges(
+      subscription.razorpaySubscriptionId!
+    );
+
+    const reverted =
+      updatedPlanPaise === fullAmountPaise ||
+      pending?.plan_id === fullPlanId ||
+      updated.has_scheduled_changes === true;
+
+    if (reverted) {
+      await Subscription.updateOne(
+        { _id: subscription._id },
+        { $set: { promoRevertScheduled: true } }
+      );
+    }
+
+    logger.info(LOG_TAG, 'Promo revert to full plan price requested on Razorpay', {
       subscriptionId: subscription._id,
       razorpaySubscriptionId: subscription.razorpaySubscriptionId,
+      scheduleAt,
+      paidCount,
+      fullPlanId,
+      fullAmount: plan.amount,
+      verified: reverted,
+      currentPlanPaise,
+      updatedPlanPaise,
+      pendingPlanId: pending?.plan_id,
+    });
+
+    if (!reverted && scheduleAt === 'cycle_end' && paidCount >= 1) {
+      await razorpayService.updateSubscriptionPlan(
+        subscription.razorpaySubscriptionId!,
+        fullPlanId,
+        'now'
+      );
+      await Subscription.updateOne(
+        { _id: subscription._id },
+        { $set: { promoRevertScheduled: true } }
+      );
+      logger.info(LOG_TAG, 'Promo revert fallback — switched to full plan immediately', {
+        subscriptionId: subscription._id,
+        fullAmount: plan.amount,
+      });
+    }
+  } catch (err) {
+    logger.error(LOG_TAG, 'Failed to schedule promo revert to full plan price', {
+      subscriptionId: subscription._id,
+      razorpaySubscriptionId: subscription.razorpaySubscriptionId,
+      scheduleAt,
+      paidCount,
+      fullPlanId,
+      fullAmount: plan.amount,
       err,
     });
   }
@@ -690,6 +771,24 @@ export const subscriptionService = {
     subscription.razorpayCustomerId = customer.id;
     await subscription.save();
 
+    if (
+      appliedPromo &&
+      appliedPromo.billingCycles === 1 &&
+      promoDiscountedRupees != null &&
+      promoDiscountedRupees < plan.amount
+    ) {
+      try {
+        const freshRzSub = await razorpayService.fetchSubscription(razorpaySub.id);
+        if (['authenticated', 'active'].includes(freshRzSub.status)) {
+          await schedulePromoRevertToFullPrice(
+            (await Subscription.findById(subscription._id))!
+          );
+        }
+      } catch (err) {
+        logger.warn(LOG_TAG, 'Could not pre-schedule promo revert at order creation', { err });
+      }
+    }
+
     const saved = await Subscription.findById(subscription._id).select('razorpaySubscriptionId');
     if (!saved?.razorpaySubscriptionId) {
       logger.error(LOG_TAG, 'razorpaySubscriptionId not persisted after save', {
@@ -927,17 +1026,24 @@ export const subscriptionService = {
       case 'subscription.activated':
       case 'subscription.charged': {
         if (subEntity?.id) {
+          await schedulePromoRevertByRazorpayId(subEntity.id);
+
           const paymentId =
             paymentEntity?.id ??
             (await razorpayService.fetchLatestPaidPaymentForSubscription(subEntity.id));
           if (paymentId) {
             await this.processRecurringCharge(subEntity.id, paymentId, subEntity.notes);
+          } else if (eventName === 'subscription.authenticated') {
+            logger.info(LOG_TAG, 'Subscription authenticated — promo revert scheduled, awaiting first charge', {
+              subscriptionId: subEntity.id,
+            });
           } else {
             logger.warn(LOG_TAG, 'Subscription event without payment id', {
               event: eventName,
               subscriptionId: subEntity.id,
             });
           }
+
           await schedulePromoRevertByRazorpayId(subEntity.id);
         }
         break;
@@ -948,6 +1054,7 @@ export const subscriptionService = {
         const pay = paymentEntity;
         if (pay?.subscription_id && pay.id) {
           await this.processRecurringCharge(pay.subscription_id, pay.id);
+          await schedulePromoRevertByRazorpayId(pay.subscription_id);
         }
         break;
       }
@@ -956,6 +1063,7 @@ export const subscriptionService = {
         const invoice = event.payload?.invoice?.entity;
         if (invoice?.subscription_id && invoice.payment_id) {
           await this.processRecurringCharge(invoice.subscription_id, invoice.payment_id);
+          await schedulePromoRevertByRazorpayId(invoice.subscription_id);
         }
         break;
       }
@@ -1033,7 +1141,7 @@ export const subscriptionService = {
       };
     }
 
-    if (local.promoBillingCycles === 1 && !local.promoRevertScheduled) {
+    if (needsFirstCyclePromoRevert(local)) {
       await schedulePromoRevertToFullPrice(local);
       local =
         (await Subscription.findById(local._id).populate('planId')) ??
@@ -1043,6 +1151,12 @@ export const subscriptionService = {
     const razorpaySubscriptionId = local.razorpaySubscriptionId as string;
     const rz = await razorpayService.fetchSubscription(razorpaySubscriptionId);
     const recurringActive = ['active', 'authenticated'].includes(rz.status);
+
+    const scheduled = await razorpayService.fetchScheduledChanges(razorpaySubscriptionId);
+    const nextPlanId = scheduled?.plan_id ?? rz.plan_id;
+    const nextChargePaise = nextPlanId
+      ? await razorpayService.fetchPlanAmountPaise(nextPlanId)
+      : null;
 
     return {
       hasRecurring: true,
@@ -1054,6 +1168,11 @@ export const subscriptionService = {
       remainingCount: rz.remaining_count ?? 0,
       chargeAt: rz.charge_at ? new Date(rz.charge_at * 1000).toISOString() : null,
       recurringActive,
+      fullPlanAmountRupees: local.amount,
+      nextChargeAmountRupees:
+        nextChargePaise != null ? Math.round(nextChargePaise / 100) : local.amount,
+      promoRevertScheduled: Boolean(local.promoRevertScheduled),
+      hasScheduledPlanChange: Boolean(scheduled?.plan_id || rz.has_scheduled_changes),
       message: recurringActive
         ? 'Auto-debit mandate is active. Razorpay will charge on schedule.'
         : `Razorpay subscription is "${rz.status}" — auto-debit will not run until active/authenticated.`,
