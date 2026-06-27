@@ -136,6 +136,25 @@
     .upload-zone:hover { border-color: var(--primary); background: var(--primary-light); }
     .upload-zone .upload-icon { font-size: 2rem; margin-bottom: 8px; }
 
+    /* Modal & form */
+    .modal-overlay { position: fixed; inset: 0; background: rgba(15,23,42,.45); z-index: 500; display: flex; align-items: center; justify-content: center; padding: 20px; }
+    .modal { background: var(--surface); border-radius: var(--radius); box-shadow: var(--shadow-lg); width: 100%; max-width: 560px; max-height: 90vh; overflow-y: auto; }
+    .modal-header { padding: 20px 24px; border-bottom: 1px solid var(--border); display: flex; justify-content: space-between; align-items: center; }
+    .modal-header h3 { font-size: 1.05rem; font-weight: 700; }
+    .modal-body { padding: 24px; }
+    .modal-footer { padding: 16px 24px; border-top: 1px solid var(--border); display: flex; justify-content: flex-end; gap: 10px; }
+    .form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+    .form-grid .full { grid-column: 1 / -1; }
+    .form-group label { display: block; font-size: .75rem; font-weight: 600; color: var(--muted); margin-bottom: 6px; text-transform: uppercase; letter-spacing: .04em; }
+    .form-group input, .form-group select, .form-group textarea { width: 100%; padding: 11px 14px; border: 1.5px solid var(--border); border-radius: 9px; font-size: .875rem; font-family: inherit; background: var(--bg); }
+    .form-group input:focus, .form-group select:focus { outline: none; border-color: var(--primary); box-shadow: 0 0 0 3px var(--primary-light); }
+    .form-group .hint { font-size: .72rem; color: var(--muted); margin-top: 4px; }
+    .plan-checkboxes { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; max-height: 160px; overflow-y: auto; padding: 12px; border: 1.5px solid var(--border); border-radius: 9px; background: var(--bg); }
+    .plan-checkboxes label { display: flex; align-items: center; gap: 8px; font-size: .8rem; font-weight: 500; color: var(--text); text-transform: none; letter-spacing: 0; cursor: pointer; }
+    .btn-sm { padding: 6px 12px; font-size: .78rem; }
+    .btn-danger { background: var(--danger); color: #fff; }
+    .badge-inactive { background: var(--danger-bg); color: #dc2626; }
+
     @media (max-width: 900px) {
       .login-wrap { grid-template-columns: 1fr; }
       .login-brand { display: none; }
@@ -191,6 +210,7 @@
           <button class="nav-item" data-section="renewals"><span class="icon">🔔</span> Renewals</button>
           <button class="nav-item" data-section="libraries"><span class="icon">📚</span> Libraries</button>
           <button class="nav-item" data-section="import"><span class="icon">📥</span> Import Students</button>
+          <button class="nav-item" data-section="coupons"><span class="icon">🎟️</span> Coupons</button>
         </nav>
         <div class="sidebar-footer">Bridgr Platform v1.0</div>
       </aside>
@@ -252,6 +272,8 @@
     let selectedLibraryId = null;
     let filterOptions = {};
     let txPage = 1;
+    let editingPromoId = null;
+    let cachedPlans = [];
 
     const $ = (id) => document.getElementById(id);
     const formatMoney = (n) => '₹' + Number(n || 0).toLocaleString('en-IN', { maximumFractionDigits: 0 });
@@ -473,6 +495,210 @@
       $('filterCity').innerHTML = '<option value="">All Cities</option>' + (res.data||[]).map(c=>`<option value="${c}">${c}</option>`).join('');
     }
 
+    function promoBadge(active) {
+      return active
+        ? '<span class="badge badge-active">Active</span>'
+        : '<span class="badge badge-inactive">Disabled</span>';
+    }
+
+    function formatDate(d) {
+      if (!d) return '—';
+      return new Date(d).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' });
+    }
+
+    function formatLimit(n) {
+      return n == null ? 'Unlimited' : String(n);
+    }
+
+    async function loadPlansForCoupons() {
+      if (cachedPlans.length) return cachedPlans;
+      const res = await api('/subscription/plans');
+      const grouped = res.data || {};
+      cachedPlans = [];
+      for (const plans of Object.values(grouped)) {
+        (plans || []).forEach(p => cachedPlans.push(p));
+      }
+      return cachedPlans;
+    }
+
+    function renderPromoForm(promo) {
+      const isEdit = Boolean(promo?._id);
+      const p = promo || {};
+      const planChecks = cachedPlans.map(pl => {
+        const checked = (p.applicablePlanIds || []).some(id => String(id) === String(pl._id));
+        return `<label><input type="checkbox" name="planIds" value="${pl._id}" ${checked ? 'checked' : ''} /> ${pl.name}</label>`;
+      }).join('') || '<span style="color:var(--muted);font-size:.8rem">No active plans found</span>';
+
+      return `<div class="modal-overlay" id="promoModal">
+        <div class="modal">
+          <div class="modal-header">
+            <h3>${isEdit ? 'Edit Coupon' : 'Create Coupon'}</h3>
+            <button class="btn btn-outline btn-sm" type="button" onclick="closePromoModal()">✕</button>
+          </div>
+          <div class="modal-body">
+            <div class="form-grid">
+              <div class="form-group">
+                <label>Coupon Code *</label>
+                <input type="text" id="promoCode" value="${p.code || ''}" placeholder="e.g. SUMMER50" style="text-transform:uppercase" ${isEdit ? 'readonly' : ''} />
+              </div>
+              <div class="form-group">
+                <label>Discount Type *</label>
+                <select id="promoDiscountType">
+                  <option value="percentage" ${p.discountType === 'percentage' || !p.discountType ? 'selected' : ''}>Percentage (%)</option>
+                  <option value="flat" ${p.discountType === 'flat' ? 'selected' : ''}>Flat Amount (₹)</option>
+                </select>
+              </div>
+              <div class="form-group">
+                <label>Discount Value *</label>
+                <input type="number" id="promoDiscountValue" value="${p.discountValue ?? ''}" min="0.01" step="0.01" placeholder="50" />
+              </div>
+              <div class="form-group">
+                <label>Billing Cycles</label>
+                <input type="number" id="promoBillingCycles" value="${p.billingCycles ?? ''}" min="1" placeholder="1 = first month only" />
+                <div class="hint">Leave empty for discount on every cycle</div>
+              </div>
+              <div class="form-group full">
+                <label>Display Label</label>
+                <input type="text" id="promoDiscountLabel" value="${p.discountLabel || ''}" placeholder="50% off first month" />
+              </div>
+              <div class="form-group">
+                <label>Max Total Uses</label>
+                <input type="number" id="promoMaxUses" value="${p.maxUses ?? ''}" min="1" placeholder="Unlimited" />
+                <div class="hint">Total libraries/users who can use this code</div>
+              </div>
+              <div class="form-group">
+                <label>Max Uses Per Library</label>
+                <input type="number" id="promoMaxUsesPerLibrary" value="${p.maxUsesPerLibrary ?? ''}" min="1" placeholder="Unlimited" />
+                <div class="hint">How many times one library can redeem</div>
+              </div>
+              <div class="form-group">
+                <label>Valid From</label>
+                <input type="datetime-local" id="promoValidFrom" value="${p.validFrom ? new Date(p.validFrom).toISOString().slice(0,16) : ''}" />
+              </div>
+              <div class="form-group">
+                <label>Expiry Date</label>
+                <input type="datetime-local" id="promoValidUntil" value="${p.validUntil ? new Date(p.validUntil).toISOString().slice(0,16) : ''}" />
+                <div class="hint">Leave empty for no expiry</div>
+              </div>
+              <div class="form-group full">
+                <label>Applicable Plans</label>
+                <div class="plan-checkboxes">${planChecks}</div>
+                <div class="hint">Leave all unchecked to apply on all plans</div>
+              </div>
+              <div class="form-group full">
+                <label><input type="checkbox" id="promoIsActive" ${p.isActive !== false ? 'checked' : ''} /> Active</label>
+              </div>
+            </div>
+          </div>
+          <div class="modal-footer">
+            <button class="btn btn-outline" type="button" onclick="closePromoModal()">Cancel</button>
+            <button class="btn btn-primary" type="button" id="savePromoBtn">${isEdit ? 'Save Changes' : 'Create Coupon'}</button>
+          </div>
+        </div>
+      </div>`;
+    }
+
+    function collectPromoPayload() {
+      const code = $('promoCode').value.trim();
+      const discountValue = Number($('promoDiscountValue').value);
+      const billingCyclesRaw = $('promoBillingCycles').value.trim();
+      const maxUsesRaw = $('promoMaxUses').value.trim();
+      const maxUsesPerLibraryRaw = $('promoMaxUsesPerLibrary').value.trim();
+      const validFromRaw = $('promoValidFrom').value;
+      const validUntilRaw = $('promoValidUntil').value;
+      const planIds = [...document.querySelectorAll('input[name="planIds"]:checked')].map(el => el.value);
+
+      const payload = {
+        code,
+        discountType: $('promoDiscountType').value,
+        discountValue,
+        discountLabel: $('promoDiscountLabel').value.trim() || undefined,
+        billingCycles: billingCyclesRaw ? Number(billingCyclesRaw) : undefined,
+        maxUses: maxUsesRaw ? Number(maxUsesRaw) : undefined,
+        maxUsesPerLibrary: maxUsesPerLibraryRaw ? Number(maxUsesPerLibraryRaw) : undefined,
+        validFrom: validFromRaw ? new Date(validFromRaw).toISOString() : undefined,
+        validUntil: validUntilRaw ? new Date(validUntilRaw).toISOString() : undefined,
+        applicablePlanIds: planIds,
+        isActive: $('promoIsActive').checked,
+      };
+
+      if (editingPromoId) {
+        payload.billingCycles = billingCyclesRaw ? Number(billingCyclesRaw) : null;
+        payload.maxUses = maxUsesRaw ? Number(maxUsesRaw) : null;
+        payload.maxUsesPerLibrary = maxUsesPerLibraryRaw ? Number(maxUsesPerLibraryRaw) : null;
+        payload.validFrom = validFromRaw ? new Date(validFromRaw).toISOString() : null;
+        payload.validUntil = validUntilRaw ? new Date(validUntilRaw).toISOString() : null;
+        payload.discountLabel = $('promoDiscountLabel').value.trim();
+      }
+
+      return payload;
+    }
+
+    window.closePromoModal = () => {
+      $('promoModal')?.remove();
+      editingPromoId = null;
+    };
+
+    window.openPromoForm = async (promoId) => {
+      await loadPlansForCoupons();
+      let promo = null;
+      if (promoId) {
+        const res = await api('/admin/subscription/promo-codes');
+        promo = (res.data || []).find(p => String(p._id) === String(promoId));
+        editingPromoId = promoId;
+      } else {
+        editingPromoId = null;
+      }
+      document.body.insertAdjacentHTML('beforeend', renderPromoForm(promo));
+      $('savePromoBtn').addEventListener('click', savePromo);
+    };
+
+    async function savePromo() {
+      try {
+        const payload = collectPromoPayload();
+        if (!payload.code || payload.code.length < 2) { showToast('Enter a valid coupon code', true); return; }
+        if (!payload.discountValue || payload.discountValue <= 0) { showToast('Enter a valid discount value', true); return; }
+
+        if (editingPromoId) {
+          const updatePayload = { ...payload };
+          delete updatePayload.code;
+          await api('/admin/subscription/promo-codes/' + editingPromoId, {
+            method: 'PUT',
+            body: JSON.stringify(updatePayload),
+          });
+          showToast('Coupon updated');
+        } else {
+          await api('/admin/subscription/promo-codes', {
+            method: 'POST',
+            body: JSON.stringify(payload),
+          });
+          showToast('Coupon created');
+        }
+        closePromoModal();
+        loadSection();
+      } catch (e) {
+        showToast(e.message, true);
+      }
+    }
+
+    window.togglePromoStatus = async (promoId, currentlyActive) => {
+      if (!confirm(currentlyActive ? 'Disable this coupon?' : 'Enable this coupon?')) return;
+      try {
+        if (currentlyActive) {
+          await api('/admin/subscription/promo-codes/' + promoId + '/disable', { method: 'PATCH' });
+        } else {
+          await api('/admin/subscription/promo-codes/' + promoId, {
+            method: 'PUT',
+            body: JSON.stringify({ isActive: true }),
+          });
+        }
+        showToast(currentlyActive ? 'Coupon disabled' : 'Coupon enabled');
+        loadSection();
+      } catch (e) {
+        showToast(e.message, true);
+      }
+    };
+
     const sectionLoaders = {
       overview: async () => {
         const res = await api('/admin/analytics/summary?' + getFilters());
@@ -610,6 +836,44 @@
           <div id="importResult" style="margin-top:20px"></div>
         </div>`;
       },
+      coupons: async () => {
+        const res = await api('/admin/subscription/promo-codes');
+        const promos = res.data || [];
+        const actions = `<button class="btn btn-primary" onclick="openPromoForm()">+ Create Coupon</button>`;
+        const rows = promos.length
+          ? promos.map(p => {
+              const discount = p.discountType === 'percentage'
+                ? `${p.discountValue}%`
+                : `₹${p.discountValue}`;
+              const usage = `${p.usedCount ?? 0}${p.maxUses != null ? ' / ' + p.maxUses : ''}`;
+              return `<tr>
+                <td><code style="font-size:.85rem;font-weight:700">${p.code}</code></td>
+                <td>${discount}</td>
+                <td style="max-width:180px">${p.discountLabel || '—'}</td>
+                <td>${p.billingCycles ?? 'All cycles'}</td>
+                <td>${usage}</td>
+                <td>${formatLimit(p.maxUsesPerLibrary)}</td>
+                <td>${formatDate(p.validUntil)}</td>
+                <td>${promoBadge(p.isActive)}</td>
+                <td style="white-space:nowrap">
+                  <button class="btn btn-outline btn-sm" onclick="openPromoForm('${p._id}')">Edit</button>
+                  <button class="btn ${p.isActive ? 'btn-danger' : 'btn-success'} btn-sm" style="margin-left:6px" onclick="togglePromoStatus('${p._id}', ${p.isActive})">${p.isActive ? 'Disable' : 'Enable'}</button>
+                </td>
+              </tr>`;
+            }).join('')
+          : emptyTable(9, 'No coupons yet — create your first one');
+        return `<div class="card" style="padding:18px 22px;margin-bottom:20px">
+          <p style="color:var(--muted);font-size:.875rem;line-height:1.6">
+            Manage subscription promo codes. Set expiry, total usage limit, and per-library usage limit.
+            Existing seeded codes (PROMO40, PROMO50, PROMO60) are shown here and can be edited if needed.
+          </p>
+        </div>` + wrapTable(
+          `Coupons (${promos.length})`,
+          ['Code', 'Discount', 'Label', 'Billing Cycles', 'Total Uses', 'Per Library', 'Expiry', 'Status', 'Actions'],
+          rows,
+          actions
+        );
+      },
     };
 
     window.exportTx = async (format) => {
@@ -630,7 +894,8 @@
     async function loadSection() {
       $('content').innerHTML = '<div class="loading-grid"><div class="skeleton"></div><div class="skeleton"></div><div class="skeleton"></div><div class="skeleton"></div></div>';
       $('globalError').classList.add('hidden');
-      const fq = getFilters();
+      toggleFiltersVisibility();
+      const fq = sectionsWithoutFilters.has(currentSection) ? '' : getFilters();
       if (fq === null) { showToast('Select both From and To dates for custom range', true); return; }
       try {
         const html = await sectionLoaders[currentSection]();
@@ -689,7 +954,14 @@
       }
     }
 
-    const titles = { overview:'Overview Dashboard', revenue:'Revenue Analytics', growth:'Growth Analytics', 'library-status':'Library Status', transactions:'Transaction Ledger', resources:'Resource Usage', executives:'Executive Performance', renewals:'Renewal Forecast', libraries:'All Libraries', import:'Import Students' };
+    const titles = { overview:'Overview Dashboard', revenue:'Revenue Analytics', growth:'Growth Analytics', 'library-status':'Library Status', transactions:'Transaction Ledger', resources:'Resource Usage', executives:'Executive Performance', renewals:'Renewal Forecast', libraries:'All Libraries', import:'Import Students', coupons:'Coupon Management' };
+
+    const sectionsWithoutFilters = new Set(['coupons', 'import']);
+
+    function toggleFiltersVisibility() {
+      const filtersEl = document.querySelector('.filters');
+      if (filtersEl) filtersEl.classList.toggle('hidden', sectionsWithoutFilters.has(currentSection));
+    }
 
     document.querySelectorAll('.nav-item').forEach(btn => {
       btn.addEventListener('click', () => {
@@ -699,6 +971,7 @@
         selectedLibraryId = null;
         $('pageTitle').textContent = titles[currentSection] || currentSection;
         $('breadcrumbSection').textContent = titles[currentSection] || currentSection;
+        toggleFiltersVisibility();
         loadSection();
       });
     });

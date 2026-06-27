@@ -25,7 +25,7 @@ export const subscriptionController = {
 
   validatePromo: asyncHandler(async (req: Request, res: Response) => {
     const { planId, promoCode } = req.body;
-    const result = await subscriptionService.validatePromo(planId, promoCode);
+    const result = await subscriptionService.validatePromo(planId, promoCode, getAuthUserId(req));
     res.status(200).json(new ApiResponse(200, MESSAGES.PROMO_VALIDATED, result));
   }),
 

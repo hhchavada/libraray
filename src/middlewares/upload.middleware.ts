@@ -47,3 +47,18 @@ export const uploadDocument = multer({
   limits: { fileSize: 5 * 1024 * 1024 },
   fileFilter: documentFilter,
 }).single('document');
+
+const profilePictureFilter: multer.Options['fileFilter'] = (_req, file, cb) => {
+  const allowed = ['image/jpeg', 'image/png', 'image/webp', 'image/jpg'];
+  if (allowed.includes(file.mimetype) || file.originalname.match(/\.(jpe?g|png|webp)$/i)) {
+    cb(null, true);
+  } else {
+    cb(new ApiError(400, 'Only JPEG, PNG, or WebP images are allowed for profile pictures'));
+  }
+};
+
+export const uploadProfilePicture = multer({
+  storage,
+  limits: { fileSize: 2 * 1024 * 1024 },
+  fileFilter: profilePictureFilter,
+}).single('profilePicture');

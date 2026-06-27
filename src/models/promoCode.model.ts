@@ -18,6 +18,8 @@ export interface IPromoCode {
   /** Empty = all active plans. */
   applicablePlanIds: Types.ObjectId[];
   maxUses?: number;
+  /** Max times a single library (owner) can redeem this code. Omit = unlimited. */
+  maxUsesPerLibrary?: number;
   usedCount: number;
   validFrom?: Date;
   validUntil?: Date;
@@ -60,6 +62,10 @@ const promoCodeSchema = new Schema<IPromoCodeDocument>(
       default: [],
     },
     maxUses: {
+      type: Number,
+      min: 1,
+    },
+    maxUsesPerLibrary: {
       type: Number,
       min: 1,
     },

@@ -433,7 +433,7 @@ export const subscriptionService = {
     return renewal.populate('planId');
   },
 
-  async validatePromo(planId: string, promoCode: string): Promise<PromoPricingPreview> {
+  async validatePromo(planId: string, promoCode: string, userId: string): Promise<PromoPricingPreview> {
     if (!mongoose.Types.ObjectId.isValid(planId)) {
       throw new ApiError(400, MESSAGES.VALIDATION_ERROR);
     }
@@ -443,7 +443,7 @@ export const subscriptionService = {
       throw new ApiError(404, MESSAGES.SUBSCRIPTION_PLAN_NOT_FOUND);
     }
 
-    const promo = await promoService.findValidPromoForPlan(promoCode, plan);
+    const promo = await promoService.findValidPromoForPlan(promoCode, plan, userId);
     return promoService.buildPricingPreview(promo, plan);
   },
 
@@ -515,7 +515,7 @@ export const subscriptionService = {
     let promoDiscountedRupees: number | undefined;
     let checkoutRazorpayPlanId = razorpayPlanId;
     if (promoCode?.trim()) {
-      appliedPromo = await promoService.findValidPromoForPlan(promoCode, plan);
+      appliedPromo = await promoService.findValidPromoForPlan(promoCode, plan, userId);
       promoDiscountedRupees = promoService.calculateDiscountedAmount(plan.amount, appliedPromo);
       checkoutRazorpayPlanId = await ensureRazorpayPlanAtAmount(
         plan,

@@ -3,7 +3,7 @@ import { memberController } from '../controllers/member.controller';
 import { validate } from '../middlewares/validate';
 import { memberValidation, memberIdParam } from '../validations/member.validation';
 import { protect } from '../middlewares/auth.middleware';
-import { uploadDocument } from '../middlewares/upload.middleware';
+import { uploadDocument, uploadProfilePicture } from '../middlewares/upload.middleware';
 
 const router = Router();
 
@@ -48,6 +48,12 @@ router.post(
   validate(memberIdParam, 'params'),
   uploadDocument,
   memberController.uploadDocument
+);
+router.post(
+  '/:id/profile-picture',
+  validate(memberIdParam, 'params'),
+  uploadProfilePicture,
+  memberController.uploadProfilePicture
 );
 router.get('/:id', memberController.getMemberById);
 router.put('/:id', validate(memberValidation.updateMember), memberController.updateMember);

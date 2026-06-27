@@ -29,6 +29,7 @@ import {
 } from '../utils/cloudinary.util';
 
 const MEMBER_DOCUMENT_FOLDER = 'member-documents';
+const MEMBER_PROFILE_PICTURE_FOLDER = 'member-profile-pictures';
 
 export interface MemberFilters {
   status?: MemberStatus;
@@ -936,6 +937,53 @@ export const memberService = {
     member.document = uploadResult.secure_url;
     member.documentPublicId = uploadResult.public_id;
     member.documentResourceType = uploadResult.resource_type;
+    await member.save();
+
+    return this.getMemberById(memberId);
+  },
+
+  async uploadProfilePicture(
+    memberId: string,
+    libraryId: string,
+    fileBuffer: Buffer,
+    mimeType: string
+  ): Promise<IMemberDocument> {
+    const member = await this.getMemberById(memberId, { populateSeat: false });
+
+    if (member.library.toString() !== libraryId) {
+      throw new ApiError(404, MESSAGES.MEMBER_NOT_FOUND);
+    }
+
+    if (member.profilePicturePublicId) {
+      try {
+        await deleteFromCloudinary(
+          member.profilePicturePublicId,
+          member.profilePictureResourceType ?? 'image'
+        );
+      } catch (error) {
+        console.error('Failed to delete previous profile picture from Cloudinary:', error);
+      }
+    }
+
+    const format = mimeType.includes('png')
+      ? 'png'
+      : mimeType.includes('webp')
+        ? 'webp'
+        : 'jpg';
+
+    const uploadResult = await uploadBufferToCloudinary(
+      fileBuffer,
+      MEMBER_PROFILE_PICTURE_FOLDER,
+      `profile-${member._id.toString()}`,
+      {
+        resourceType: 'image',
+        format,
+      }
+    );
+
+    member.profilePicture = uploadResult.secure_url;
+    member.profilePicturePublicId = uploadResult.public_id;
+    member.profilePictureResourceType = uploadResult.resource_type;
     await member.save();
 
     return this.getMemberById(memberId);

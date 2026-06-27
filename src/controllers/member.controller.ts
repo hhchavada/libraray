@@ -135,4 +135,22 @@ export const memberController = {
       .status(200)
       .json(new ApiResponse(200, MESSAGES.MEMBER_DOCUMENT_UPLOADED, member.toJSON()));
   }),
+
+  uploadProfilePicture: asyncHandler(async (req: Request, res: Response) => {
+    if (!req.file?.buffer) {
+      res.status(400).json(new ApiResponse(400, MESSAGES.MEMBER_PROFILE_PICTURE_REQUIRED, null));
+      return;
+    }
+
+    const libraryId = await getOwnerLibraryId(getAuthUserId(req));
+    const member = await memberService.uploadProfilePicture(
+      req.params.id,
+      libraryId,
+      req.file.buffer,
+      req.file.mimetype
+    );
+    res
+      .status(200)
+      .json(new ApiResponse(200, MESSAGES.MEMBER_PROFILE_PICTURE_UPLOADED, member.toJSON()));
+  }),
 };

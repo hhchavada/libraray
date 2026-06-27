@@ -35,6 +35,9 @@ export interface IMember {
   document?: string;
   documentPublicId?: string;
   documentResourceType?: string;
+  profilePicture?: string;
+  profilePicturePublicId?: string;
+  profilePictureResourceType?: string;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -154,6 +157,18 @@ const memberSchema = new Schema<IMemberDocument>(
       type: String,
       trim: true,
     },
+    profilePicture: {
+      type: String,
+      trim: true,
+    },
+    profilePicturePublicId: {
+      type: String,
+      trim: true,
+    },
+    profilePictureResourceType: {
+      type: String,
+      trim: true,
+    },
   },
   {
     timestamps: true,
@@ -162,6 +177,8 @@ const memberSchema = new Schema<IMemberDocument>(
         const formatted = formatMemberLabels(ret as Record<string, unknown>);
         delete formatted.documentPublicId;
         delete formatted.documentResourceType;
+        delete formatted.profilePicturePublicId;
+        delete formatted.profilePictureResourceType;
         return formatted;
       },
     },

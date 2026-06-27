@@ -1,7 +1,12 @@
 import mongoose from 'mongoose';
 import { PromoCode, IPromoCodeDocument } from '../models/promoCode.model';
+import { Subscription } from '../models/subscription.model';
 import { ISubscriptionPlanDocument } from '../models/subscriptionPlan.model';
-import { PromoDiscountType } from '../constants/enums';
+import {
+  LibrarySubscriptionStatus,
+  PromoDiscountType,
+  SubscriptionPaymentStatus,
+} from '../constants/enums';
 import { ApiError } from '../utils/ApiError';
 import { MESSAGES } from '../constants/messages';
 
@@ -74,7 +79,25 @@ export const promoService = {
     };
   },
 
-  assertPromoApplicable(promo: IPromoCodeDocument, planId: string): void {
+  async getLibraryPromoUsageCount(
+    promoCodeId: mongoose.Types.ObjectId | string,
+    userId: mongoose.Types.ObjectId | string
+  ): Promise<number> {
+    return Subscription.countDocuments({
+      promoCodeId,
+      userId,
+      paymentStatus: {
+        $in: [SubscriptionPaymentStatus.PAID, SubscriptionPaymentStatus.PENDING],
+      },
+      status: { $ne: LibrarySubscriptionStatus.CANCELLED },
+    });
+  },
+
+  async assertPromoApplicable(
+    promo: IPromoCodeDocument,
+    planId: string,
+    userId?: string
+  ): Promise<void> {
     if (!promo.isActive) {
       throw new ApiError(400, MESSAGES.PROMO_INVALID);
     }
@@ -91,6 +114,13 @@ export const promoService = {
       throw new ApiError(400, MESSAGES.PROMO_USAGE_LIMIT_REACHED);
     }
 
+    if (userId && promo.maxUsesPerLibrary != null) {
+      const libraryUses = await this.getLibraryPromoUsageCount(promo._id, userId);
+      if (libraryUses >= promo.maxUsesPerLibrary) {
+        throw new ApiError(400, MESSAGES.PROMO_LIBRARY_USAGE_LIMIT_REACHED);
+      }
+    }
+
     if (promo.applicablePlanIds.length > 0) {
       const allowed = promo.applicablePlanIds.some((id) => String(id) === planId);
       if (!allowed) {
@@ -101,7 +131,8 @@ export const promoService = {
 
   async findValidPromoForPlan(
     rawCode: string,
-    plan: ISubscriptionPlanDocument
+    plan: ISubscriptionPlanDocument,
+    userId?: string
   ): Promise<IPromoCodeDocument> {
     const code = this.normalizeCode(rawCode);
     if (!code) {
@@ -113,7 +144,7 @@ export const promoService = {
       throw new ApiError(400, MESSAGES.PROMO_INVALID);
     }
 
-    this.assertPromoApplicable(promo, String(plan._id));
+    await this.assertPromoApplicable(promo, String(plan._id), userId);
     return promo;
   },
 
@@ -126,6 +157,10 @@ export const promoService = {
   ): Promise<IPromoCodeDocument> {
     if (payload.code) {
       payload.code = this.normalizeCode(payload.code);
+      const existing = await PromoCode.findOne({ code: payload.code });
+      if (existing) {
+        throw new ApiError(409, MESSAGES.PROMO_CODE_ALREADY_EXISTS);
+      }
     }
     return PromoCode.create(payload);
   },
@@ -139,6 +174,13 @@ export const promoService = {
     }
     if (payload.code) {
       payload.code = this.normalizeCode(payload.code);
+      const existing = await PromoCode.findOne({
+        code: payload.code,
+        _id: { $ne: promoId },
+      });
+      if (existing) {
+        throw new ApiError(409, MESSAGES.PROMO_CODE_ALREADY_EXISTS);
+      }
     }
 
     const promo = await PromoCode.findByIdAndUpdate(promoId, payload, {

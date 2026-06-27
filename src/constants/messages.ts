@@ -79,6 +79,8 @@ export const MESSAGES = {
   MEMBER_PAYMENT_EXCEEDS_DUE: 'Payment amount exceeds due amount',
   MEMBER_DOCUMENT_UPLOADED: 'Member document uploaded successfully',
   MEMBER_DOCUMENT_REQUIRED: 'Document file is required',
+  MEMBER_PROFILE_PICTURE_UPLOADED: 'Profile picture uploaded successfully',
+  MEMBER_PROFILE_PICTURE_REQUIRED: 'Profile picture file is required',
 
   // Seat
   SEAT_NOT_AVAILABLE: 'Seat is not available',
@@ -171,10 +173,12 @@ export const MESSAGES = {
   PROMO_NOT_STARTED: 'This promo code is not active yet',
   PROMO_EXPIRED: 'This promo code has expired',
   PROMO_USAGE_LIMIT_REACHED: 'This promo code has reached its usage limit',
+  PROMO_LIBRARY_USAGE_LIMIT_REACHED: 'This library has already used this promo code the maximum number of times',
   PROMO_NOT_APPLICABLE_TO_PLAN: 'This promo code is not valid for the selected plan',
   PROMO_DISCOUNT_TOO_HIGH: 'Promo discount exceeds the minimum payable amount',
   PROMO_INVALID_CONFIGURATION: 'Promo code is misconfigured',
   PROMO_CREATED: 'Promo code created successfully',
+  PROMO_CODE_ALREADY_EXISTS: 'A promo code with this code already exists',
   PROMO_UPDATED: 'Promo code updated successfully',
   PROMO_DISABLED: 'Promo code disabled successfully',
   PROMO_LIST_FETCHED: 'Promo codes fetched successfully',
