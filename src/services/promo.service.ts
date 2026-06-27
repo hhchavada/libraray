@@ -17,6 +17,8 @@ export interface PromoPricingPreview {
   valid: true;
   originalAmount: number;
   discountedAmount: number;
+  /** Auto-debit amount after the promo period (same as original when billingCycles is 1). */
+  recurringAmount: number;
   discountLabel: string;
   currency: string;
   /** null = discounted price on every cycle; 1 = first cycle only, etc. */
@@ -69,11 +71,14 @@ export const promoService = {
   ): PromoPricingPreview {
     const originalAmount = plan.amount;
     const discountedAmount = this.calculateDiscountedAmount(originalAmount, promo);
+    const recurringAmount =
+      promo.billingCycles == null ? discountedAmount : originalAmount;
     return {
       promoCode: promo.code,
       valid: true,
       originalAmount,
       discountedAmount,
+      recurringAmount,
       discountLabel: this.buildDiscountLabel(promo),
       currency: plan.currency ?? 'INR',
       billingCycles: promo.billingCycles ?? null,

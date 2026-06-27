@@ -33,6 +33,8 @@ export interface ISubscription {
   promoDiscountedAmount?: number;
   /** Promo cycles at discounted Razorpay plan (null = all cycles). */
   promoBillingCycles?: number;
+  /** Razorpay full-price plan scheduled at cycle_end after a one-cycle promo. */
+  promoRevertScheduled?: boolean;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -130,6 +132,10 @@ const subscriptionSchema = new Schema<ISubscriptionDocument>(
     promoBillingCycles: {
       type: Number,
       min: 1,
+    },
+    promoRevertScheduled: {
+      type: Boolean,
+      default: false,
     },
   },
   {
