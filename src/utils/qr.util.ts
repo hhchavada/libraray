@@ -102,7 +102,8 @@ export const generateLibraryQrCode = async (
     const uploadResult = await uploadBufferToCloudinary(
       pngBuffer,
       CLOUDINARY_QR_FOLDER,
-      qrCodeId
+      qrCodeId,
+      { format: 'png' }
     );
     cloudinaryUrl = uploadResult.secure_url;
   } catch (error) {

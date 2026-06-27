@@ -251,6 +251,7 @@
     let currentSection = 'overview';
     let selectedLibraryId = null;
     let filterOptions = {};
+    let txPage = 1;
 
     const $ = (id) => document.getElementById(id);
     const formatMoney = (n) => '₹' + Number(n || 0).toLocaleString('en-IN', { maximumFractionDigits: 0 });
@@ -265,7 +266,7 @@
       setTimeout(() => t.remove(), 3500);
     };
 
-    const getFilters = () => {
+    const getFilters = (extra = {}) => {
       const q = new URLSearchParams();
       const dateFilter = $('filterDate').value;
       if (dateFilter === 'custom_range') {
@@ -288,6 +289,8 @@
       if (exec && /^[a-f0-9]{24}$/i.test(exec)) q.set('executiveId', exec);
       if (libraryCode) q.set('libraryCode', libraryCode);
       if (search) q.set('search', search);
+      if (extra.page) q.set('page', String(extra.page));
+      if (extra.limit) q.set('limit', String(extra.limit));
       return q.toString();
     };
 
@@ -378,7 +381,40 @@
           </tr>`).join('')
         : emptyTable(10, 'No students in this library');
 
-      return header + kpis + wrapTable(
+      const seatMgmt = `<div class="card" style="padding:20px 22px;margin-bottom:20px">
+        <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:16px;flex-wrap:wrap">
+          <div>
+            <h3 style="font-size:1rem;margin-bottom:6px">Manage Seats</h3>
+            <p style="color:var(--muted);font-size:.875rem">
+              Total <strong>${d.seats.total}</strong> · Available <strong>${d.seats.available}</strong> · Booked <strong>${d.seats.booked}</strong> · Locked <strong>${d.seats.locked}</strong>
+              ${d.seatMap?.hasCustomSeatMap ? ' · <span class="badge badge-demo">Custom map</span>' : ''}
+            </p>
+          </div>
+          <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+            <button class="btn btn-outline" type="button" onclick="adjustLibrarySeats('${d.libraryId}', -1)">− Remove</button>
+            <input type="number" id="seatDelta" value="1" min="1" max="50" style="width:72px;padding:10px 12px;border:1.5px solid var(--border);border-radius:9px;font-family:inherit;text-align:center" />
+            <button class="btn btn-primary" type="button" onclick="adjustLibrarySeats('${d.libraryId}', 1)">+ Add</button>
+          </div>
+        </div>
+        <p style="color:var(--muted);font-size:.78rem;margin-top:12px">Remove only works on unassigned seats (highest seat numbers first). Max 50 per action.</p>
+      </div>`;
+
+      const seatRows = (d.seatsList || []).length
+        ? d.seatsList.map(s => {
+            const booking = (s.bookings || [])[0];
+            return `<tr>
+              <td><strong>#${s.seatNumber}</strong></td>
+              <td>${s.cellLabel || '—'}</td>
+              <td>${statusBadge(s.status)}</td>
+              <td>${booking ? `${booking.fullName} (${booking.memberId})` : '—'}</td>
+              <td>${(s.bookedShifts || []).join(', ') || '—'}</td>
+            </tr>`;
+          }).join('')
+        : emptyTable(5, 'No seats in this library');
+
+      return header + kpis + seatMgmt
+        + wrapTable(`Seats (${d.seatsList?.length || 0})`, ['Seat', 'Cell', 'Status', 'Assigned To', 'Shifts'], seatRows)
+        + wrapTable(
         `Students (${d.membersList?.length || 0})`,
         ['ID', 'Name', 'Mobile', 'Type', 'Shift', 'Seat', 'Plan', 'Status', 'Paid', 'Due'],
         memberRows
@@ -398,6 +434,24 @@
       $('pageTitle').textContent = titles.libraries;
       $('breadcrumbSection').textContent = titles.libraries;
       loadSection();
+    };
+
+    window.adjustLibrarySeats = async (libraryId, sign) => {
+      const amount = Math.max(1, Math.min(50, Number($('seatDelta')?.value || 1)));
+      const delta = sign * amount;
+      try {
+        const res = await api('/admin/libraries/' + libraryId + '/seats', {
+          method: 'PATCH',
+          body: JSON.stringify({ delta }),
+        });
+        const msg = res.data?.added
+          ? `Added ${res.data.added} seat(s) — total ${res.data.totalSeats}`
+          : `Removed ${res.data.removed} seat(s) — total ${res.data.totalSeats}`;
+        showToast(msg);
+        openLibraryDetail(libraryId);
+      } catch (e) {
+        showToast(e.message, true);
+      }
     };
 
     function wrapTable(title, headers, rows, actions) {
@@ -452,28 +506,37 @@
         const res = await api('/admin/analytics/library-status?' + getFilters());
         const d = res.data;
         const badge = s => ({demo:'badge-demo',active:'badge-active',grace_period:'badge-grace',terminated:'badge-terminated'}[s]||'');
-        let rows = '';
+        const allLibs = [];
         for (const [status, libs] of Object.entries(d.libraries||{})) {
-          (libs||[]).forEach(l => {
-            rows += `<tr class="row-clickable" onclick="openLibraryDetail('${l.libraryId}')">
+          (libs||[]).forEach(l => allLibs.push({ ...l, statusKey: status }));
+        }
+        allLibs.sort((a, b) => new Date(b.createdAt || 0) - new Date(a.createdAt || 0));
+        let rows = allLibs.length
+          ? allLibs.map(l => `<tr class="row-clickable" onclick="openLibraryDetail('${l.libraryId}')">
               <td><code style="font-size:.75rem">${l.libraryCode || '—'}</code></td>
               <td><strong>${l.libraryName}</strong></td>
               <td>${l.city}, ${l.state}</td>
               <td>${l.activePlanName || '—'}</td>
               <td>${l.owner.fullName}</td>
-              <td><span class="badge ${badge(status)}">${status.replace('_',' ')}</span></td>
+              <td>${l.createdAt ? new Date(l.createdAt).toLocaleDateString('en-IN') : '—'}</td>
+              <td><span class="badge ${badge(l.statusKey)}">${l.statusKey.replace('_',' ')}</span></td>
               <td><button class="btn-link" onclick="event.stopPropagation();openLibraryDetail('${l.libraryId}')">View students →</button></td>
-            </tr>`;
-          });
-        }
-        if (!rows) rows = emptyTable(7,'No libraries found');
+            </tr>`).join('')
+          : emptyTable(8,'No libraries found');
         return renderKpis({totalRevenue:0,monthlyRevenue:0,annualRevenue:0,activeSubscriptions:0,expiredSubscriptions:0,revenueGrowthPercent:0},{demo:d.summary.demo,active:d.summary.active,gracePeriod:d.summary.gracePeriod,terminated:d.summary.terminated})
-          + wrapTable('Libraries by Status',['ID','Library','Location','Plan','Owner','Status',''],rows);
+          + wrapTable('Libraries by Status',['ID','Library','Location','Plan','Owner','Created','Status',''],rows);
       },
       transactions: async () => {
-        const res = await api('/admin/transactions?' + getFilters());
+        const fq = getFilters({ page: txPage, limit: 20 });
+        const res = await api('/admin/transactions?' + fq);
         const d = res.data;
-        const actions = `<div style="display:flex;gap:8px"><button class="btn btn-outline" onclick="exportTx('excel')">⬇ Excel</button><button class="btn btn-outline" onclick="exportTx('csv')">⬇ CSV</button></div>`;
+        const actions = `<div style="display:flex;gap:8px;align-items:center">
+          <button class="btn btn-outline" onclick="exportTx('excel')">⬇ Excel</button>
+          <button class="btn btn-outline" onclick="exportTx('csv')">⬇ CSV</button>
+          ${d.totalPages > 1 ? `<span style="font-size:.8rem;color:var(--muted)">Page ${d.currentPage} / ${d.totalPages}</span>
+          <button class="btn btn-outline" id="txPrev" ${d.currentPage <= 1 ? 'disabled' : ''}>← Prev</button>
+          <button class="btn btn-outline" id="txNext" ${d.currentPage >= d.totalPages ? 'disabled' : ''}>Next →</button>` : ''}
+        </div>`;
         const rows = (d.transactions||[]).length
           ? d.transactions.map(t=>`<tr><td><code style="font-size:.75rem">${(t.transactionId||'—').slice(0,16)}</code></td><td><code style="font-size:.75rem">${t.libraryCode || '—'}</code></td><td><strong>${t.libraryName}</strong></td><td>${t.ownerName}</td><td>${new Date(t.paymentDate).toLocaleDateString('en-IN')}</td><td>${t.planName}</td><td style="font-weight:600">${formatMoney(t.grossAmount)}</td><td>${formatMoney(t.gstAmount)}</td><td style="color:var(--success);font-weight:600">${formatMoney(t.netSettlementAmount)}</td><td><span class="badge badge-paid">${t.paymentStatus}</span></td></tr>`).join('')
           : emptyTable(10,'No transactions in this period');
@@ -515,14 +578,15 @@
               <td><strong>${l.libraryName}</strong><br><span style="color:var(--muted);font-size:.78rem">${l.address}</span></td>
               <td>${l.subscriptionPlan?.name || '—'}<br><span style="color:var(--muted);font-size:.78rem">${l.subscriptionPlan?.category || ''}</span></td>
               <td>${l.owner?.fullName||'—'}</td>
+              <td>${l.createdAt ? new Date(l.createdAt).toLocaleDateString('en-IN') : '—'}</td>
               <td>${l.members.total} <span style="color:var(--muted)">(${l.members.active} active)</span></td>
               <td>${l.seats.booked}/${l.seats.total}</td>
               <td style="color:var(--success);font-weight:600">${formatMoney(l.revenue.totalCollected)}</td>
               <td><span class="badge ${l.isActive?'badge-active':'badge-terminated'}">${l.isActive?'Active':'Inactive'}</span></td>
               <td><button class="btn-link" onclick="event.stopPropagation();openLibraryDetail('${l.libraryId}')">View students →</button></td>
             </tr>`).join('')
-          : emptyTable(9,'No libraries');
-        return wrapTable('All Libraries — click a row to view students',['ID','Library','Subscription Plan','Owner','Students','Seats','Revenue','Status',''],rows);
+          : emptyTable(10,'No libraries');
+        return wrapTable('All Libraries — newest first',['ID','Library','Subscription Plan','Owner','Created','Students','Seats','Revenue','Status',''],rows);
       },
       import: async () => {
         const dash = await api('/admin/dashboard?' + getFilters());
@@ -550,7 +614,9 @@
 
     window.exportTx = async (format) => {
       try {
-        const res = await fetch(API + '/admin/transactions/export?' + getFilters() + '&format=' + format, { headers: { Authorization: 'Bearer ' + getToken() } });
+        const fq = getFilters();
+        if (fq === null) { showToast('Select both From and To dates for custom range', true); return; }
+        const res = await fetch(API + '/admin/transactions/export?' + fq + '&format=' + format, { headers: { Authorization: 'Bearer ' + getToken() } });
         if (!res.ok) throw new Error('Export failed');
         const blob = await res.blob();
         const a = document.createElement('a');
@@ -569,6 +635,10 @@
       try {
         const html = await sectionLoaders[currentSection]();
         $('content').innerHTML = html;
+        if (currentSection === 'transactions') {
+          $('txPrev')?.addEventListener('click', () => { if (txPage > 1) { txPage -= 1; loadSection(); } });
+          $('txNext')?.addEventListener('click', () => { txPage += 1; loadSection(); });
+        }
         if (currentSection === 'import') {
           $('downloadTemplateBtn').addEventListener('click', async () => {
             try {
@@ -634,13 +704,18 @@
     });
 
     const onFilterChange = (id) => {
+      txPage = 1;
       if (id === 'filterDate') {
         const custom = $('filterDate').value === 'custom_range';
         $('filterFromGroup').classList.toggle('hidden', !custom);
         $('filterToGroup').classList.toggle('hidden', !custom);
         if (custom) return;
       }
-      if (id === 'filterState') { loadCities().then(loadSection); return; }
+      if (id === 'filterState') {
+        $('filterCity').value = '';
+        loadCities().then(loadSection);
+        return;
+      }
       loadSection();
     };
 
@@ -654,6 +729,9 @@
       $('loginBtn').disabled = true;
       try {
         const res = await api('/auth/login', { method: 'POST', body: JSON.stringify({ email: $('loginEmail').value.trim(), password: $('loginPassword').value }) });
+        if (res.data?.user?.role !== 'super_admin') {
+          throw new Error('Only super admin accounts can access this panel');
+        }
         localStorage.setItem(TOKEN_KEY, res.data.accessToken);
         $('loginView').classList.add('hidden');
         $('appView').classList.remove('hidden');

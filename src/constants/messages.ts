@@ -77,6 +77,8 @@ export const MESSAGES = {
   MEMBER_MARKED_AS_PAID: 'Payment recorded and due amount updated successfully',
   MEMBER_NO_DUE: 'Member has no due amount to pay',
   MEMBER_PAYMENT_EXCEEDS_DUE: 'Payment amount exceeds due amount',
+  MEMBER_DOCUMENT_UPLOADED: 'Member document uploaded successfully',
+  MEMBER_DOCUMENT_REQUIRED: 'Document file is required',
 
   // Seat
   SEAT_NOT_AVAILABLE: 'Seat is not available',
@@ -89,8 +91,20 @@ export const MESSAGES = {
   SEAT_RELEASED: 'Seat released successfully',
   SEAT_ALREADY_BOOKED: 'Seat is already booked',
   SEAT_LOCKED: 'Seat locked successfully',
+  SEAT_DELETED: 'Seat deleted successfully',
+  SEATS_DELETED: 'Seats deleted successfully',
+  SEAT_ASSIGNED_CANNOT_DELETE:
+    'Cannot delete seat — it is assigned to a member. Release the seat first',
+  SEAT_LOCKED_CANNOT_DELETE: 'Cannot delete seat — it is currently locked',
   SEATS_FETCHED: 'Seats fetched successfully',
   SEAT_NOT_FOUND: 'Seat not found',
+  SEAT_ADJUST_LIMIT: 'Cannot adjust more than 50 seats at once',
+  SEAT_MAX_LIMIT: 'Library cannot exceed 1000 seats',
+  SEAT_MIN_LIMIT: 'Library must have at least one seat',
+  SEAT_REMOVE_NOT_ALLOWED:
+    'Cannot remove seats that are assigned or locked. Release or delete unassigned seats first',
+  SEAT_MAP_GRID_FULL: 'No free grid cells available on the seat map',
+  LIBRARY_SEATS_UPDATED: 'Library seats updated successfully',
 
   // Payment
   PAYMENT_RECORDED: 'Payment recorded successfully',

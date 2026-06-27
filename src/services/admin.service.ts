@@ -375,9 +375,30 @@ export const adminService = {
           dueAmount: m.dueAmount ?? 0,
           seatNumber: seat?.seatNumber ?? null,
           membershipPlan: m.membershipPlan ?? null,
+          document: m.document ?? '',
         } as Record<string, unknown>);
       }) as AdminLibraryDetail['membersList'],
       seatsList,
+    };
+  },
+
+  async updateLibrarySeats(libraryId: string, delta: number) {
+    if (!mongoose.Types.ObjectId.isValid(libraryId)) {
+      throw new ApiError(400, MESSAGES.VALIDATION_ERROR);
+    }
+
+    const library = await Library.findById(libraryId);
+    if (!library) {
+      throw new ApiError(404, MESSAGES.LIBRARY_NOT_FOUND);
+    }
+
+    const result = await seatService.adjustLibrarySeats(libraryId, delta);
+    const detail = await this.getLibraryDetail(libraryId);
+
+    return {
+      ...result,
+      seats: detail.seats,
+      seatMap: detail.seatMap,
     };
   },
 };

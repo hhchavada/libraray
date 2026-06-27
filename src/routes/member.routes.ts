@@ -3,6 +3,7 @@ import { memberController } from '../controllers/member.controller';
 import { validate } from '../middlewares/validate';
 import { memberValidation, memberIdParam } from '../validations/member.validation';
 import { protect } from '../middlewares/auth.middleware';
+import { uploadDocument } from '../middlewares/upload.middleware';
 
 const router = Router();
 
@@ -41,6 +42,12 @@ router.post(
   validate(memberIdParam, 'params'),
   validate(memberValidation.markAsPaid),
   memberController.markAsPaid
+);
+router.post(
+  '/:id/document',
+  validate(memberIdParam, 'params'),
+  uploadDocument,
+  memberController.uploadDocument
 );
 router.get('/:id', memberController.getMemberById);
 router.put('/:id', validate(memberValidation.updateMember), memberController.updateMember);

@@ -32,6 +32,9 @@ export interface IMember {
   seat?: Types.ObjectId;
   status: MemberStatus;
   remarks?: string;
+  document?: string;
+  documentPublicId?: string;
+  documentResourceType?: string;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -139,12 +142,27 @@ const memberSchema = new Schema<IMemberDocument>(
       type: String,
       trim: true,
     },
+    document: {
+      type: String,
+      trim: true,
+    },
+    documentPublicId: {
+      type: String,
+      trim: true,
+    },
+    documentResourceType: {
+      type: String,
+      trim: true,
+    },
   },
   {
     timestamps: true,
     toJSON: {
       transform(_doc, ret) {
-        return formatMemberLabels(ret as Record<string, unknown>);
+        const formatted = formatMemberLabels(ret as Record<string, unknown>);
+        delete formatted.documentPublicId;
+        delete formatted.documentResourceType;
+        return formatted;
       },
     },
   }

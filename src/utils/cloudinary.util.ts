@@ -4,6 +4,7 @@ import { ApiError } from './ApiError';
 interface CloudinaryUploadResponse {
   secure_url: string;
   public_id: string;
+  resource_type?: string;
 }
 
 // Hardcoded so production does not depend on .env loading for QR uploads.
@@ -18,12 +19,14 @@ cloudinary.config(CLOUDINARY_CONFIG);
 export interface UploadResult {
   secure_url: string;
   public_id: string;
+  resource_type: string;
 }
 
 export const uploadBufferToCloudinary = async (
   buffer: Buffer,
   folder: string,
-  fileName: string
+  fileName: string,
+  options?: { format?: string; resourceType?: 'image' | 'raw' | 'auto' }
 ): Promise<UploadResult> => {
   try {
     const result = await new Promise<UploadResult>((resolve, reject) => {
@@ -32,8 +35,8 @@ export const uploadBufferToCloudinary = async (
           {
             folder,
             public_id: fileName,
-            resource_type: 'image',
-            format: 'png',
+            resource_type: options?.resourceType ?? 'image',
+            ...(options?.format ? { format: options.format } : {}),
             overwrite: true,
             invalidate: false,
           },
@@ -46,6 +49,7 @@ export const uploadBufferToCloudinary = async (
               resolve({
                 secure_url: result.secure_url,
                 public_id: result.public_id,
+                resource_type: result.resource_type ?? options?.resourceType ?? 'image',
               });
             }
           }
@@ -56,15 +60,18 @@ export const uploadBufferToCloudinary = async (
     return result;
   } catch (error) {
     console.error('Cloudinary upload error:', error);
-    throw new ApiError(500, 'Failed to upload image to Cloudinary');
+    throw new ApiError(500, 'Failed to upload file to Cloudinary');
   }
 };
 
-export const deleteFromCloudinary = async (publicId: string): Promise<void> => {
+export const deleteFromCloudinary = async (
+  publicId: string,
+  resourceType: string = 'image'
+): Promise<void> => {
   try {
-    await cloudinary.uploader.destroy(publicId);
+    await cloudinary.uploader.destroy(publicId, { resource_type: resourceType });
   } catch (error) {
     console.error('Cloudinary delete error:', error);
-    throw new ApiError(500, 'Failed to delete image from Cloudinary');
+    throw new ApiError(500, 'Failed to delete file from Cloudinary');
   }
 };

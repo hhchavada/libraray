@@ -47,6 +47,7 @@ interface LibraryContext {
   activePlanName: string | null;
   planEndDate: Date | null;
   lifecycleStatus: LibraryLifecycleStatus;
+  createdAt: Date;
   owner: { id: string; fullName: string; email: string; mobileNumber: string; registeredAt?: Date };
 }
 
@@ -65,8 +66,33 @@ export const buildLibraryQuery = async (filters: AdminFilters): Promise<mongoose
 
   if (filters.executiveId && mongoose.Types.ObjectId.isValid(filters.executiveId)) {
     const exec = await SalesExecutive.findById(filters.executiveId).lean();
-    if (exec?.assignedCities?.length) {
-      query.city = { $in: exec.assignedCities };
+    if (!exec) {
+      return [];
+    }
+
+    const execCities = exec.assignedCities ?? [];
+    const execStates = exec.assignedStates ?? [];
+
+    if (execCities.length > 0) {
+      if (filters.city) {
+        if (!execCities.includes(filters.city)) {
+          return [];
+        }
+        query.city = filters.city;
+      } else {
+        query.city = { $in: execCities };
+      }
+    } else if (execStates.length > 0) {
+      if (filters.state) {
+        if (!execStates.includes(filters.state)) {
+          return [];
+        }
+        query.state = filters.state;
+      } else {
+        query.state = { $in: execStates };
+      }
+    } else {
+      return [];
     }
   }
 
@@ -95,8 +121,42 @@ export const buildLibraryQuery = async (filters: AdminFilters): Promise<mongoose
     ];
   }
 
-  const libs = await Library.find(query).select('_id').lean();
+  const libs = await Library.find(query).select('_id').sort({ createdAt: -1 }).lean();
   return libs.map((l) => l._id);
+};
+
+const pickLibraryContextForOwner = (
+  ownerId: string,
+  contexts: LibraryContext[],
+  preferredLibraryCode?: string
+): LibraryContext | undefined => {
+  const ownerContexts = contexts.filter((c) => c.owner.id === ownerId);
+  if (ownerContexts.length === 0) return undefined;
+  if (preferredLibraryCode) {
+    const code = preferredLibraryCode.toUpperCase();
+    return (
+      ownerContexts.find((c) => c.libraryCode.toUpperCase() === code) ??
+      ownerContexts.find((c) => c.libraryCode.toUpperCase().includes(code)) ??
+      ownerContexts[0]
+    );
+  }
+  return ownerContexts[0];
+};
+
+const matchExecutiveLibraries = (
+  exec: { assignedCities?: string[]; assignedStates?: string[] },
+  contexts: LibraryContext[]
+): LibraryContext[] => {
+  const cities = exec.assignedCities ?? [];
+  const states = exec.assignedStates ?? [];
+
+  if (cities.length > 0) {
+    return contexts.filter((c) => cities.includes(c.city));
+  }
+  if (states.length > 0) {
+    return contexts.filter((c) => states.includes(c.state));
+  }
+  return [];
 };
 
 const buildLibraryContexts = async (libraryIds: mongoose.Types.ObjectId[]): Promise<LibraryContext[]> => {
@@ -104,6 +164,7 @@ const buildLibraryContexts = async (libraryIds: mongoose.Types.ObjectId[]): Prom
 
   const libraries = await Library.find({ _id: { $in: libraryIds } })
     .populate('owner', 'fullName email mobileNumber createdAt')
+    .sort({ createdAt: -1 })
     .lean<LibraryLean[]>();
 
   const ownerIds = toValidObjectIds(
@@ -164,6 +225,7 @@ const buildLibraryContexts = async (libraryIds: mongoose.Types.ObjectId[]): Prom
         : (planDoc?.name ?? null),
       planEndDate: activePaid?.endDate ?? latestPaid?.endDate ?? null,
       lifecycleStatus,
+      createdAt: lib.createdAt,
       owner: ownerDoc
         ? {
             id: ownerDoc._id.toString(),
@@ -221,8 +283,8 @@ export const adminAnalyticsService = {
       cities: cities.filter(Boolean).sort(),
       libraries: (
         await Library.find({ libraryCode: { $exists: true, $ne: '' } })
-          .select('libraryCode libraryName')
-          .sort({ libraryCode: 1 })
+          .select('libraryCode libraryName createdAt')
+          .sort({ createdAt: -1 })
           .lean()
       ).map((l) => ({
         id: l._id.toString(),
@@ -396,7 +458,11 @@ export const adminAnalyticsService = {
       byDuration[label].subscriptions += 1;
       byDuration[label].revenue += sub.amount;
 
-      const ctx = contexts.find((c) => c.owner.id === sub.userId.toString());
+      const ctx = pickLibraryContextForOwner(
+        sub.userId.toString(),
+        contexts,
+        filters.libraryCode
+      );
       if (ctx) {
         if (!byLocation[ctx.state]) byLocation[ctx.state] = {};
         byLocation[ctx.state][ctx.city] = (byLocation[ctx.state][ctx.city] ?? 0) + sub.amount;
@@ -423,6 +489,8 @@ export const adminAnalyticsService = {
   async getGrowthAnalytics(filters: AdminFilters) {
     const { from, to } = getAdminDateRange(filters.dateFilter, filters.dateFrom, filters.dateTo);
     const libraryIds = await buildLibraryQuery(filters);
+    const contexts = await buildLibraryContexts(libraryIds);
+    const ownerIds = toValidObjectIds(contexts.map((c) => c.owner.id));
 
     const [totalLibraries, activeLibraries, totalMembers, activeMembers, totalSeats, bookedSeats] =
       await Promise.all([
@@ -450,6 +518,9 @@ export const adminAnalyticsService = {
         $match: {
           createdAt: { $gte: from, $lte: to },
           paymentStatus: SubscriptionPaymentStatus.PAID,
+          ...(ownerIds.length > 0
+            ? { userId: { $in: ownerIds } }
+            : { _id: { $in: [] as mongoose.Types.ObjectId[] } }),
         },
       },
       {
@@ -502,6 +573,12 @@ export const adminAnalyticsService = {
       grouped[ctx.lifecycleStatus].push(ctx);
     }
 
+    for (const status of Object.values(LibraryLifecycleStatus)) {
+      grouped[status].sort(
+        (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+      );
+    }
+
     return {
       summary: {
         demo: grouped[LibraryLifecycleStatus.DEMO].length,
@@ -517,7 +594,6 @@ export const adminAnalyticsService = {
     const { from, to } = getAdminDateRange(filters.dateFilter, filters.dateFrom, filters.dateTo);
     const libraryIds = await buildLibraryQuery(filters);
     const contexts = await buildLibraryContexts(libraryIds);
-    const ownerMap = new Map(contexts.map((c) => [c.owner.id, c]));
 
     const query: Record<string, unknown> = {
       paymentStatus: SubscriptionPaymentStatus.PAID,
@@ -543,7 +619,11 @@ export const adminAnalyticsService = {
     ]);
 
     const transactions = subs.map((sub) => {
-      const ctx = ownerMap.get(sub.userId.toString());
+      const ctx = pickLibraryContextForOwner(
+        sub.userId.toString(),
+        contexts,
+        filters.libraryCode
+      );
       const plan = sub.planId as { name?: string } | null;
       const gst =
         sub.taxableAmount != null
@@ -610,22 +690,29 @@ export const adminAnalyticsService = {
     return rows.sort((a, b) => b.estimatedMonthlyCost - a.estimatedMonthlyCost);
   },
 
-  async getExecutivePerformance(_filters: AdminFilters) {
-    const executives = await SalesExecutive.find({ isActive: true }).lean();
-    const allLibraries = await Library.find().lean();
-    const allContexts = await buildLibraryContexts(allLibraries.map((l) => l._id));
+  async getExecutivePerformance(filters: AdminFilters) {
+    const { from, to } = getAdminDateRange(filters.dateFilter, filters.dateFrom, filters.dateTo);
+    const libraryIds = await buildLibraryQuery(filters);
+    const filteredContexts = await buildLibraryContexts(libraryIds);
+
+    let executives = await SalesExecutive.find({ isActive: true }).lean();
+    if (filters.executiveId) {
+      executives = executives.filter((e) => e._id.toString() === filters.executiveId);
+    }
 
     const leaderboard = await Promise.all(
       executives.map(async (exec) => {
-        const cities = exec.assignedCities ?? [];
-        const matched = allContexts.filter((c) => cities.includes(c.city));
-        const ownerIds = toValidObjectIds(matched.map((c) => c.owner.id));
+        const matched = filters.executiveId
+          ? filteredContexts
+          : matchExecutiveLibraries(exec, filteredContexts);
+        const ownerIds = toValidObjectIds([...new Set(matched.map((c) => c.owner.id))]);
 
         const paidRevenue = await Subscription.aggregate([
           {
             $match: {
               userId: { $in: ownerIds },
               paymentStatus: SubscriptionPaymentStatus.PAID,
+              createdAt: { $gte: from, $lte: to },
             },
           },
           { $group: { _id: null, total: { $sum: '$amount' } } },
@@ -638,14 +725,18 @@ export const adminAnalyticsService = {
             ? Math.round((paidCount / (demoCount + paidCount)) * 10000) / 100
             : 0;
 
-        const studentCount = await Member.countDocuments({
-          library: { $in: toValidObjectIds(matched.map((c) => c.libraryId)) },
-        });
+        const studentCount =
+          matched.length === 0
+            ? 0
+            : await Member.countDocuments({
+                library: { $in: toValidObjectIds(matched.map((c) => c.libraryId)) },
+              });
 
         return {
           executiveId: exec._id.toString(),
           executiveName: exec.fullName,
-          assignedCities: cities,
+          assignedCities: exec.assignedCities ?? [],
+          assignedStates: exec.assignedStates ?? [],
           activeLibraries: paidCount,
           revenueGenerated: paidRevenue[0]?.total ?? 0,
           conversionRate,
@@ -656,7 +747,9 @@ export const adminAnalyticsService = {
       })
     );
 
-    return leaderboard.sort((a, b) => b.revenueGenerated - a.revenueGenerated);
+    return leaderboard
+      .filter((row) => row.activeLibraries > 0 || row.revenueGenerated > 0 || row.studentsManaged > 0)
+      .sort((a, b) => b.revenueGenerated - a.revenueGenerated);
   },
 
   async getRenewalForecast(filters: AdminFilters) {
@@ -690,7 +783,11 @@ export const adminAnalyticsService = {
     }
 
     const forecast = activeSubs.map((sub) => {
-      const ctx = contexts.find((c) => c.owner.id === sub.userId.toString());
+      const ctx = pickLibraryContextForOwner(
+        sub.userId.toString(),
+        contexts,
+        filters.libraryCode
+      );
       const plan = sub.planId as { name?: string; durationType?: string } | null;
       const endDate = new Date(sub.endDate!);
       const daysRemaining = Math.ceil((endDate.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));

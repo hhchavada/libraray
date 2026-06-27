@@ -1,11 +1,15 @@
 import mongoose from 'mongoose';
 import { Seat, ISeatDocument } from '../models/seat.model';
 import { Member } from '../models/member.model';
+import { Library } from '../models/library.model';
 import { ApiError } from '../utils/ApiError';
 import { MESSAGES } from '../constants/messages';
 import { SeatStatus, ShiftType, MemberStatus, MemberType } from '../constants/enums';
 import {
+  computeSeatMapRows,
   defaultPlacementForSeat,
+  GRID_INDEX_MAX,
+  GRID_INDEX_MIN,
   placementToGridFields,
   SeatGridPlacement,
 } from '../utils/seatGrid.util';
@@ -333,5 +337,185 @@ export const seatService = {
     }
 
     return seat;
+  },
+
+  async deleteSeat(seatId: string, libraryId: string): Promise<void> {
+    await this.deleteSeats([seatId], libraryId);
+  },
+
+  async deleteSeats(
+    seatIds: string[],
+    libraryId: string
+  ): Promise<{ deletedCount: number; seatIds: string[] }> {
+    const uniqueSeatIds = [...new Set(seatIds)];
+
+    for (const seatId of uniqueSeatIds) {
+      const seat = await this.getSeatById(seatId);
+
+      if (seat.library.toString() !== libraryId) {
+        throw new ApiError(400, MESSAGES.SEAT_LIBRARY_MISMATCH);
+      }
+
+      if (seat.status === SeatStatus.LOCKED) {
+        throw new ApiError(400, MESSAGES.SEAT_LOCKED_CANNOT_DELETE);
+      }
+
+      const hasAssignedMember = await Member.exists({
+        seat: seatId,
+        status: MemberStatus.ACTIVE,
+      });
+
+      if (hasAssignedMember) {
+        throw new ApiError(400, MESSAGES.SEAT_ASSIGNED_CANNOT_DELETE);
+      }
+    }
+
+    await Seat.deleteMany({ _id: { $in: uniqueSeatIds } });
+
+    return {
+      deletedCount: uniqueSeatIds.length,
+      seatIds: uniqueSeatIds,
+    };
+  },
+
+  async adjustLibrarySeats(
+    libraryId: string,
+    delta: number
+  ): Promise<{ totalSeats: number; added?: number; removed?: number }> {
+    if (!Number.isInteger(delta) || delta === 0) {
+      throw new ApiError(400, MESSAGES.VALIDATION_ERROR);
+    }
+
+    if (Math.abs(delta) > 50) {
+      throw new ApiError(400, MESSAGES.SEAT_ADJUST_LIMIT);
+    }
+
+    const library = await Library.findById(libraryId);
+    if (!library) {
+      throw new ApiError(404, MESSAGES.LIBRARY_NOT_FOUND);
+    }
+
+    const currentCount = await Seat.countDocuments({ library: libraryId });
+    const seatMapColumns = library.seatMapColumns ?? 12;
+
+    if (delta > 0) {
+      if (currentCount + delta > 1000) {
+        throw new ApiError(400, MESSAGES.SEAT_MAX_LIMIT);
+      }
+
+      const maxSeatDoc = await Seat.findOne({ library: libraryId }).sort({ seatNumber: -1 });
+      let nextSeatNumber = (maxSeatDoc?.seatNumber ?? 0) + 1;
+
+      const existingSeats = library.hasCustomSeatMap
+        ? await Seat.find({ library: libraryId }).select('gridRowIndex gridColumnIndex').lean()
+        : [];
+      const occupiedCells = new Set(
+        existingSeats.map((s) => `${s.gridColumnIndex ?? ''}-${s.gridRowIndex ?? ''}`)
+      );
+
+      const seatsToInsert: Array<{
+        library: string;
+        seatNumber: number;
+        gridColumn: string;
+        gridRow: string;
+        gridColumnIndex: number;
+        gridRowIndex: number;
+        cellLabel: string;
+        status: SeatStatus;
+      }> = [];
+
+      for (let i = 0; i < delta; i++) {
+        let grid;
+        if (!library.hasCustomSeatMap) {
+          grid = defaultPlacementForSeat(nextSeatNumber, seatMapColumns);
+        } else {
+          let found = false;
+          for (let row = GRID_INDEX_MIN; row <= GRID_INDEX_MAX && !found; row++) {
+            for (let col = GRID_INDEX_MIN; col <= GRID_INDEX_MAX && !found; col++) {
+              const key = `${col}-${row}`;
+              if (!occupiedCells.has(key)) {
+                grid = placementToGridFields({ seatNumber: nextSeatNumber, row, column: col });
+                occupiedCells.add(key);
+                found = true;
+              }
+            }
+          }
+          if (!grid) {
+            throw new ApiError(400, MESSAGES.SEAT_MAP_GRID_FULL);
+          }
+        }
+
+        seatsToInsert.push({
+          library: libraryId,
+          seatNumber: nextSeatNumber,
+          gridColumn: grid.gridColumn,
+          gridRow: grid.gridRow,
+          gridColumnIndex: grid.gridColumnIndex,
+          gridRowIndex: grid.gridRowIndex,
+          cellLabel: grid.cellLabel,
+          status: SeatStatus.AVAILABLE,
+        });
+        nextSeatNumber += 1;
+      }
+
+      await Seat.insertMany(seatsToInsert);
+
+      const newTotal = currentCount + delta;
+      library.totalSeats = newTotal;
+
+      if (!library.hasCustomSeatMap) {
+        library.seatMapRows = computeSeatMapRows(newTotal, seatMapColumns);
+      } else {
+        const maxRow = Math.max(
+          library.seatMapRows ? library.seatMapRows - 1 : 0,
+          ...seatsToInsert.map((s) => s.gridRowIndex)
+        );
+        const maxCol = Math.max(
+          library.seatMapColumns ? library.seatMapColumns - 1 : 0,
+          ...seatsToInsert.map((s) => s.gridColumnIndex)
+        );
+        library.seatMapRows = Math.max(library.seatMapRows ?? 0, maxRow + 1);
+        library.seatMapColumns = Math.max(library.seatMapColumns ?? seatMapColumns, maxCol + 1);
+      }
+
+      await library.save();
+      return { totalSeats: newTotal, added: delta };
+    }
+
+    const removeCount = Math.abs(delta);
+    if (currentCount - removeCount < 1) {
+      throw new ApiError(400, MESSAGES.SEAT_MIN_LIMIT);
+    }
+
+    const seats = await Seat.find({ library: libraryId }).sort({ seatNumber: -1 });
+    const toDelete: string[] = [];
+
+    for (const seat of seats) {
+      if (toDelete.length >= removeCount) break;
+      if (seat.status === SeatStatus.LOCKED) continue;
+
+      const hasAssignedMember = await Member.exists({
+        seat: seat._id,
+        status: MemberStatus.ACTIVE,
+      });
+      if (hasAssignedMember) continue;
+
+      toDelete.push(seat._id.toString());
+    }
+
+    if (toDelete.length < removeCount) {
+      throw new ApiError(400, MESSAGES.SEAT_REMOVE_NOT_ALLOWED);
+    }
+
+    await Seat.deleteMany({ _id: { $in: toDelete } });
+
+    const newTotal = currentCount - removeCount;
+    library.totalSeats = newTotal;
+    if (!library.hasCustomSeatMap) {
+      library.seatMapRows = computeSeatMapRows(newTotal, seatMapColumns);
+    }
+    await library.save();
+
+    return { totalSeats: newTotal, removed: removeCount };
   },
 };

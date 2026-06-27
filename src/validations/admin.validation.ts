@@ -6,7 +6,11 @@ const adminFiltersSchema = {
     .valid(...Object.values(AdminDateFilter))
     .optional()
     .default(AdminDateFilter.THIS_MONTH),
-  dateFrom: Joi.date().iso().optional(),
+  dateFrom: Joi.date().iso().when('filter', {
+    is: AdminDateFilter.CUSTOM_RANGE,
+    then: Joi.required(),
+    otherwise: Joi.optional(),
+  }),
   dateTo: Joi.date().iso().when('filter', {
     is: AdminDateFilter.CUSTOM_RANGE,
     then: Joi.required(),
@@ -54,5 +58,9 @@ export const adminValidation = {
 
   libraryIdParam: Joi.object({
     libraryId: Joi.string().hex().length(24).required(),
+  }),
+
+  updateLibrarySeats: Joi.object({
+    delta: Joi.number().integer().not(0).min(-50).max(50).required(),
   }),
 };

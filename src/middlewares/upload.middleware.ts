@@ -21,3 +21,29 @@ export const uploadExcel = multer({
   limits: { fileSize: 5 * 1024 * 1024 },
   fileFilter: excelFilter,
 }).single('file');
+
+const documentFilter: multer.Options['fileFilter'] = (_req, file, cb) => {
+  const allowed = [
+    'image/jpeg',
+    'image/png',
+    'image/webp',
+    'image/jpg',
+    'application/pdf',
+    'application/msword',
+    'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+  ];
+  if (
+    allowed.includes(file.mimetype) ||
+    file.originalname.match(/\.(jpe?g|png|webp|pdf|docx?)$/i)
+  ) {
+    cb(null, true);
+  } else {
+    cb(new ApiError(400, 'Only image, PDF, or Word documents are allowed'));
+  }
+};
+
+export const uploadDocument = multer({
+  storage,
+  limits: { fileSize: 5 * 1024 * 1024 },
+  fileFilter: documentFilter,
+}).single('document');

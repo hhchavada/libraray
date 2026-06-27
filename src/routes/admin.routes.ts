@@ -13,8 +13,14 @@ router.use(protect);
 router.use(authorizeRoles(UserRole.SUPER_ADMIN));
 
 // Legacy dashboard
-router.get('/dashboard', adminController.getDashboard);
-router.get('/libraries/:libraryId', adminController.getLibraryDetail);
+router.get('/dashboard', validate(adminValidation.filters, 'query'), adminController.getDashboard);
+router.get('/libraries/:libraryId', validate(adminValidation.libraryIdParam, 'params'), adminController.getLibraryDetail);
+router.patch(
+  '/libraries/:libraryId/seats',
+  validate(adminValidation.libraryIdParam, 'params'),
+  validate(adminValidation.updateLibrarySeats),
+  adminController.updateLibrarySeats
+);
 
 // Filter options
 router.get('/filters', adminController.getFilterOptions);

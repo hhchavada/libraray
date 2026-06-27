@@ -23,6 +23,12 @@ import {
   resolveMemberStatusOnUpdate,
   startOfTodayIST,
 } from '../utils/memberExpiry.util';
+import {
+  deleteFromCloudinary,
+  uploadBufferToCloudinary,
+} from '../utils/cloudinary.util';
+
+const MEMBER_DOCUMENT_FOLDER = 'member-documents';
 
 export interface MemberFilters {
   status?: MemberStatus;
@@ -98,8 +104,8 @@ export interface RenewMemberData {
   membershipPlan?: MembershipPlan;
   feePerMonth?: number;
   discount?: number;
-  amountPaid: number;
-  paymentMode: PaymentMode;
+  amountPaid?: number;
+  paymentMode?: PaymentMode;
   remarks?: string;
 }
 
@@ -681,6 +687,7 @@ export const memberService = {
 
     const discount = data.discount ?? member.discount ?? 0;
     const planMonths = resolvePlanMonths(membershipPlan);
+    const amountPaid = data.amountPaid ?? 0;
 
     const now = startOfTodayIST();
     const previousEndDate = normalizeMemberDate(member.endDate ?? new Date());
@@ -691,7 +698,7 @@ export const memberService = {
       feePerMonth,
       discount,
       membershipPlan,
-      amountPaid: data.amountPaid,
+      amountPaid,
     });
 
     member.membershipPlan = membershipPlan;
@@ -699,10 +706,12 @@ export const memberService = {
     member.discount = discount;
     member.feesAfterDiscount = renewalPeriod.feesAfterDiscount;
     member.totalFee = (member.totalFee ?? 0) + renewalPeriod.totalFee;
-    member.amountPaid = (member.amountPaid ?? 0) + data.amountPaid;
+    member.amountPaid = (member.amountPaid ?? 0) + amountPaid;
     member.dueAmount = Math.max(0, member.totalFee - member.amountPaid);
     member.paymentStatus = resolvePaymentStatus(member.amountPaid, member.dueAmount);
-    member.paymentMode = data.paymentMode;
+    if (data.paymentMode !== undefined) {
+      member.paymentMode = data.paymentMode;
+    }
     member.endDate = newEndDate;
     member.status = MemberStatus.ACTIVE;
 
@@ -880,5 +889,55 @@ export const memberService = {
       members: membersWithDays,
       totalCount: membersWithDays.length,
     };
+  },
+
+  async uploadDocument(
+    memberId: string,
+    libraryId: string,
+    fileBuffer: Buffer,
+    mimeType: string
+  ): Promise<IMemberDocument> {
+    const member = await this.getMemberById(memberId, { populateSeat: false });
+
+    if (member.library.toString() !== libraryId) {
+      throw new ApiError(404, MESSAGES.MEMBER_NOT_FOUND);
+    }
+
+    if (member.documentPublicId) {
+      try {
+        await deleteFromCloudinary(
+          member.documentPublicId,
+          member.documentResourceType ?? 'image'
+        );
+      } catch (error) {
+        console.error('Failed to delete previous document from Cloudinary:', error);
+      }
+    }
+
+    const isImage = mimeType.startsWith('image/');
+    const format = mimeType.includes('png')
+      ? 'png'
+      : mimeType.includes('webp')
+        ? 'webp'
+        : mimeType.includes('jpeg') || mimeType.includes('jpg')
+          ? 'jpg'
+          : undefined;
+
+    const uploadResult = await uploadBufferToCloudinary(
+      fileBuffer,
+      MEMBER_DOCUMENT_FOLDER,
+      `member-${member._id.toString()}`,
+      {
+        resourceType: isImage ? 'image' : 'auto',
+        ...(format ? { format } : {}),
+      }
+    );
+
+    member.document = uploadResult.secure_url;
+    member.documentPublicId = uploadResult.public_id;
+    member.documentResourceType = uploadResult.resource_type;
+    await member.save();
+
+    return this.getMemberById(memberId);
   },
 };

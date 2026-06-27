@@ -26,6 +26,14 @@ export const adminController = {
     res.status(200).json(new ApiResponse(200, MESSAGES.ADMIN_LIBRARY_FETCHED, data));
   }),
 
+  updateLibrarySeats: asyncHandler(async (req: Request, res: Response) => {
+    const data = await adminService.updateLibrarySeats(
+      req.params.libraryId,
+      req.body.delta
+    );
+    res.status(200).json(new ApiResponse(200, MESSAGES.LIBRARY_SEATS_UPDATED, data));
+  }),
+
   getFilterOptions: asyncHandler(async (_req: Request, res: Response) => {
     const data = await adminAnalyticsService.getFilterOptions();
     res.status(200).json(new ApiResponse(200, MESSAGES.ADMIN_ANALYTICS_FETCHED, data));

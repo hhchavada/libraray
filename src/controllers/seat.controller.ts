@@ -47,4 +47,18 @@ export const seatController = {
     const seat = await seatService.releaseSeat(seatId, memberId, libraryId);
     res.status(200).json(new ApiResponse(200, MESSAGES.SEAT_RELEASED, seat));
   }),
+
+  deleteSeat: asyncHandler(async (req: Request, res: Response) => {
+    const libraryId = await getOwnerLibraryId(getAuthUserId(req));
+    const { seatId } = req.params;
+    await seatService.deleteSeat(seatId, libraryId);
+    res.status(200).json(new ApiResponse(200, MESSAGES.SEAT_DELETED, null));
+  }),
+
+  deleteSeats: asyncHandler(async (req: Request, res: Response) => {
+    const libraryId = await getOwnerLibraryId(getAuthUserId(req));
+    const { seatIds } = req.body as { seatIds: string[] };
+    const result = await seatService.deleteSeats(seatIds, libraryId);
+    res.status(200).json(new ApiResponse(200, MESSAGES.SEATS_DELETED, result));
+  }),
 };

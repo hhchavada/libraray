@@ -176,12 +176,12 @@ export const memberValidation = {
 
   renewMember: Joi.object({
     membershipPlan: membershipPlanSchema.optional(),
-    feePerMonth: Joi.number().positive().optional(),
+    feePerMonth: Joi.number().min(0).optional(),
     discount: Joi.number().min(0).optional(),
-    amountPaid: Joi.number().min(0).required(),
+    amountPaid: Joi.number().min(0).optional(),
     paymentMode: Joi.string()
       .valid(...Object.values(PaymentMode))
-      .required(),
+      .optional(),
     remarks: optionalRemarks,
   }),
 

@@ -16,7 +16,7 @@ export const memberController = {
   createMember: asyncHandler(async (req: Request, res: Response) => {
     const libraryId = await getOwnerLibraryId(getAuthUserId(req));
     const member = await memberService.createMember(req.body, libraryId);
-    res.status(201).json(new ApiResponse(201, MESSAGES.MEMBER_CREATED, member));
+    res.status(201).json(new ApiResponse(201, MESSAGES.MEMBER_CREATED, member.toJSON()));
   }),
 
   getAllMembers: asyncHandler(async (req: Request, res: Response) => {
@@ -39,7 +39,12 @@ export const memberController = {
     const sort = req.query.sort as MemberSortOption | undefined;
 
     const result = await memberService.getAllMembers(libraryId, filters, pagination, sort);
-    res.status(200).json(new ApiResponse(200, MESSAGES.MEMBERS_FETCHED, result));
+    res.status(200).json(
+      new ApiResponse(200, MESSAGES.MEMBERS_FETCHED, {
+        ...result,
+        members: result.members.map((member) => member.toJSON()),
+      })
+    );
   }),
 
   getMemberById: asyncHandler(async (req: Request, res: Response) => {
@@ -49,7 +54,7 @@ export const memberController = {
 
   updateMember: asyncHandler(async (req: Request, res: Response) => {
     const member = await memberService.updateMember(req.params.id, req.body);
-    res.status(200).json(new ApiResponse(200, MESSAGES.MEMBER_UPDATED, member));
+    res.status(200).json(new ApiResponse(200, MESSAGES.MEMBER_UPDATED, member.toJSON()));
   }),
 
   assignSeat: asyncHandler(async (req: Request, res: Response) => {
@@ -61,7 +66,7 @@ export const memberController = {
       seatId,
       shiftType
     );
-    res.status(200).json(new ApiResponse(200, MESSAGES.SEAT_ASSIGNED, member));
+    res.status(200).json(new ApiResponse(200, MESSAGES.SEAT_ASSIGNED, member.toJSON()));
   }),
 
   changeSeat: asyncHandler(async (req: Request, res: Response) => {
@@ -73,7 +78,7 @@ export const memberController = {
       seatId,
       shiftType
     );
-    res.status(200).json(new ApiResponse(200, MESSAGES.SEAT_CHANGED, member));
+    res.status(200).json(new ApiResponse(200, MESSAGES.SEAT_CHANGED, member.toJSON()));
   }),
 
   convertDemoToPermanent: asyncHandler(async (req: Request, res: Response) => {
@@ -111,5 +116,23 @@ export const memberController = {
     res
       .status(200)
       .json(new ApiResponse(200, MESSAGES.MEMBERS_EXPIRING_SOON_FETCHED, result));
+  }),
+
+  uploadDocument: asyncHandler(async (req: Request, res: Response) => {
+    if (!req.file?.buffer) {
+      res.status(400).json(new ApiResponse(400, MESSAGES.MEMBER_DOCUMENT_REQUIRED, null));
+      return;
+    }
+
+    const libraryId = await getOwnerLibraryId(getAuthUserId(req));
+    const member = await memberService.uploadDocument(
+      req.params.id,
+      libraryId,
+      req.file.buffer,
+      req.file.mimetype
+    );
+    res
+      .status(200)
+      .json(new ApiResponse(200, MESSAGES.MEMBER_DOCUMENT_UPLOADED, member.toJSON()));
   }),
 };

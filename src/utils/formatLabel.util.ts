@@ -23,6 +23,7 @@ export const formatMemberLabels = <T extends Record<string, unknown>>(obj: T): T
   // Optional on create — always present in API responses
   out.email = out.email != null && out.email !== '' ? out.email : '';
   out.remarks = out.remarks != null && out.remarks !== '' ? out.remarks : '';
+  out.document = out.document != null && out.document !== '' ? out.document : '';
 
   for (const field of MEMBER_LABEL_FIELDS) {
     if (typeof out[field] === 'string') {
