@@ -55,7 +55,8 @@ export const promoService = {
     } else {
       result = planAmountRupees - promo.discountValue;
     }
-    const rounded = Math.round(result * 100) / 100;
+    // Whole rupees only — plan prices and mobile clients expect integer amounts (no 64.9).
+    const rounded = Math.round(result);
     if (rounded < MIN_DISCOUNTED_AMOUNT_RUPEES) {
       throw new ApiError(400, MESSAGES.PROMO_DISCOUNT_TOO_HIGH);
     }

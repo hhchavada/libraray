@@ -272,6 +272,7 @@
     let selectedLibraryId = null;
     let filterOptions = {};
     let txPage = 1;
+    let libPage = 1;
     let editingPromoId = null;
     let cachedPlans = [];
 
@@ -797,9 +798,16 @@
       },
       libraries: async () => {
         if (selectedLibraryId) return renderLibraryDetail(selectedLibraryId);
-        const res = await api('/admin/dashboard?' + getFilters());
-        const rows = (res.data.libraries||[]).length
-          ? res.data.libraries.map(l=>`<tr class="row-clickable" onclick="openLibraryDetail('${l.libraryId}')">
+        const fq = getFilters({ page: libPage, limit: 20 });
+        const res = await api('/admin/dashboard?' + fq);
+        const d = res.data;
+        const actions = d.pagination?.totalPages > 1 ? `<div style="display:flex;gap:8px;align-items:center">
+          <span style="font-size:.8rem;color:var(--muted)">Page ${d.pagination.currentPage} / ${d.pagination.totalPages} · ${d.pagination.totalCount} libraries</span>
+          <button class="btn btn-outline" id="libPrev" ${d.pagination.currentPage <= 1 ? 'disabled' : ''}>← Prev</button>
+          <button class="btn btn-outline" id="libNext" ${d.pagination.currentPage >= d.pagination.totalPages ? 'disabled' : ''}>Next →</button>
+        </div>` : `<span style="font-size:.8rem;color:var(--muted)">${d.pagination?.totalCount ?? (d.libraries||[]).length} libraries</span>`;
+        const rows = (d.libraries||[]).length
+          ? d.libraries.map(l=>`<tr class="row-clickable" onclick="openLibraryDetail('${l.libraryId}')">
               <td><code style="font-size:.75rem">${l.libraryCode || '—'}</code></td>
               <td><strong>${l.libraryName}</strong><br><span style="color:var(--muted);font-size:.78rem">${l.address}</span></td>
               <td>${l.subscriptionPlan?.name || '—'}<br><span style="color:var(--muted);font-size:.78rem">${l.subscriptionPlan?.category || ''}</span></td>
@@ -812,12 +820,11 @@
               <td><button class="btn-link" onclick="event.stopPropagation();openLibraryDetail('${l.libraryId}')">View students →</button></td>
             </tr>`).join('')
           : emptyTable(10,'No libraries');
-        return wrapTable('All Libraries — newest first',['ID','Library','Subscription Plan','Owner','Created','Students','Seats','Revenue','Status',''],rows);
+        return wrapTable('All Libraries — newest first',['ID','Library','Subscription Plan','Owner','Created','Students','Seats','Revenue','Status',''],rows, actions);
       },
       import: async () => {
-        const dash = await api('/admin/dashboard?' + getFilters());
-        const libs = dash.data.libraries || [];
-        const opts = libs.map(l=>`<option value="${l.libraryId}">${l.libraryCode || l.libraryId} — ${l.libraryName}</option>`).join('');
+        const libs = filterOptions.libraries || [];
+        const opts = libs.map(l=>`<option value="${l.id}">${l.libraryCode || l.id} — ${l.libraryName}</option>`).join('');
         return `<div class="card" style="padding:28px">
           <h3 style="font-size:1.1rem;margin-bottom:8px">Import Members via Excel</h3>
           <p style="color:var(--muted);font-size:.875rem;margin-bottom:12px">Required columns: <code>fullName</code>, <code>mobileNumber</code>, <code>shiftType</code>, <code>startDate</code>, <code>type</code></p>
@@ -904,6 +911,10 @@
           $('txPrev')?.addEventListener('click', () => { if (txPage > 1) { txPage -= 1; loadSection(); } });
           $('txNext')?.addEventListener('click', () => { txPage += 1; loadSection(); });
         }
+        if (currentSection === 'libraries' && !selectedLibraryId) {
+          $('libPrev')?.addEventListener('click', () => { if (libPage > 1) { libPage -= 1; loadSection(); } });
+          $('libNext')?.addEventListener('click', () => { libPage += 1; loadSection(); });
+        }
         if (currentSection === 'import') {
           $('downloadTemplateBtn').addEventListener('click', async () => {
             try {
@@ -969,6 +980,8 @@
         btn.classList.add('active');
         currentSection = btn.dataset.section;
         selectedLibraryId = null;
+        libPage = 1;
+        txPage = 1;
         $('pageTitle').textContent = titles[currentSection] || currentSection;
         $('breadcrumbSection').textContent = titles[currentSection] || currentSection;
         toggleFiltersVisibility();
@@ -978,6 +991,7 @@
 
     const onFilterChange = (id) => {
       txPage = 1;
+      libPage = 1;
       if (id === 'filterDate') {
         const custom = $('filterDate').value === 'custom_range';
         $('filterFromGroup').classList.toggle('hidden', !custom);

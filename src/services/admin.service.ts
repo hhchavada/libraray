@@ -99,6 +99,12 @@ export interface AdminDashboardData {
     totalDue: number;
   };
   libraries: AdminLibraryRow[];
+  pagination: {
+    totalCount: number;
+    currentPage: number;
+    totalPages: number;
+    limit: number;
+  };
 }
 
 const buildLibraryStats = async (
@@ -262,10 +268,19 @@ export const adminService = {
       libraryFilter._id = { $in: ids };
     }
 
-    const libraries = await Library.find(libraryFilter)
-      .populate('owner', 'fullName email mobileNumber')
-      .sort({ createdAt: -1 })
-      .lean();
+    const page = filters?.page ?? 1;
+    const limit = filters?.limit ?? 20;
+    const skip = (page - 1) * limit;
+
+    const [totalCount, libraries] = await Promise.all([
+      Library.countDocuments(libraryFilter),
+      Library.find(libraryFilter)
+        .populate('owner', 'fullName email mobileNumber')
+        .sort({ createdAt: -1 })
+        .skip(skip)
+        .limit(limit)
+        .lean(),
+    ]);
 
     const ownerIds = libraries
       .map((lib) => resolveOwnerId(lib.owner))
@@ -307,7 +322,16 @@ export const adminService = {
       }
     );
 
-    return { summary, libraries: libraryRows };
+    return {
+      summary,
+      libraries: libraryRows,
+      pagination: {
+        totalCount,
+        currentPage: page,
+        totalPages: Math.max(1, Math.ceil(totalCount / limit)),
+        limit,
+      },
+    };
   },
 
   async getLibraryDetail(libraryId: string): Promise<AdminLibraryDetail> {
